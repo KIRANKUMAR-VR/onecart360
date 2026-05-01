@@ -49,12 +49,18 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
           </p>
         </div>
         
-        {showStockToggle && (
+        {showStockToggle && onToggleStock && (
           <div className="flex items-center gap-2">
             <Switch
               id={`stock-toggle-${item.id}`}
               checked={item.inStock}
-              onCheckedChange={(checked) => onToggleStock?.(item.id, checked)}
+              onCheckedChange={(checked) => {
+                if (!item.id) {
+                  console.error('[v0] Cannot toggle stock: item.id is undefined')
+                  return
+                }
+                onToggleStock(item.id, checked)
+              }}
               aria-label={`Toggle stock for ${item.name}`}
             />
             <Label 
