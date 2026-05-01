@@ -2,7 +2,8 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ChefHat, Plus, ChevronDown, Package, PackageX } from "lucide-react"
+import Image from "next/image"
+import { Plus, ChevronDown, Package, PackageX } from "lucide-react"
 import { useItems } from "@/contexts/items-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { PantryList } from "@/components/pantry-list"
@@ -27,11 +28,15 @@ export default function Home() {
         <div className="max-w-lg mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex items-center justify-center h-10 w-10 rounded-lg bg-primary text-primary-foreground">
-                <ChefHat className="h-5 w-5" />
-              </div>
+              <Image
+                src="/logo.png"
+                alt="OneCart360"
+                width={40}
+                height={40}
+                className="h-10 w-10"
+              />
               <div>
-                <h1 className="text-xl font-semibold text-balance">My Kitchen Stock</h1>
+                <h1 className="text-xl font-semibold text-balance">OneCart360</h1>
                 <p className="text-sm text-muted-foreground">
                   {items.length === 0 
                     ? "Add items to get started"

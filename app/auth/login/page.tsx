@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { ChefHat } from 'lucide-react'
+import Image from 'next/image'
 
 export default function Page() {
   const [email, setEmail] = useState('')
@@ -53,10 +53,15 @@ export default function Page() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
           <div className="flex flex-col items-center gap-2 mb-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-              <ChefHat className="h-6 w-6 text-primary" />
-            </div>
-            <h1 className="text-2xl font-bold text-foreground">My Home Stocker</h1>
+            <Image
+              src="/logo.png"
+              alt="OneCart360"
+              width={50}
+              height={50}
+              className="h-12 w-12"
+            />
+            <h1 className="text-2xl font-bold text-foreground">OneCart360</h1>
+            <p className="text-xs text-muted-foreground">Track. Manage. Never Run Out.</p>
           </div>
           <Card>
             <CardHeader>
