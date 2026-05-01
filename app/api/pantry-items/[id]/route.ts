@@ -16,15 +16,19 @@ export async function PUT(
   const body = await request.json()
   const { name, quantity, unit, in_stock } = body
 
+  // Build update object with only provided fields
+  const updateData: any = {
+    updated_at: new Date().toISOString(),
+  }
+
+  if (name !== undefined) updateData.name = name
+  if (quantity !== undefined) updateData.quantity = quantity
+  if (unit !== undefined) updateData.unit = unit
+  if (in_stock !== undefined) updateData.in_stock = in_stock
+
   const { data, error } = await supabase
     .from('pantry_items')
-    .update({
-      name,
-      quantity,
-      unit,
-      in_stock,
-      updated_at: new Date().toISOString(),
-    })
+    .update(updateData)
     .eq('id', params.id)
     .eq('user_id', user.id)
     .select()

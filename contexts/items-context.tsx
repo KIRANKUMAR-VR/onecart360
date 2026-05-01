@@ -227,13 +227,14 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to toggle stock')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to toggle stock')
       }
 
       const data = await response.json()
       setItems((prev) =>
         prev.map((i) =>
-          i.id === id ? { ...i, inStock: data.in_stock } : i
+          i.id === id ? { ...i, inStock: data.in_stock !== undefined ? data.in_stock : inStock } : i
         )
       )
     } catch (err) {
