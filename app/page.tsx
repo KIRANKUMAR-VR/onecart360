@@ -7,6 +7,7 @@ import { useItems } from "@/contexts/items-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { PantryList } from "@/components/pantry-list"
 import { CameraScan } from "@/components/camera-scan"
+import { LogoutButton } from "@/components/logout-button"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
@@ -47,6 +48,7 @@ export default function Home() {
                   Add Item
                 </Link>
               </Button>
+              <LogoutButton />
             </div>
           </div>
         </div>
