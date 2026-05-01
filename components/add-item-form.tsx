@@ -28,7 +28,7 @@ const UNITS = [
 ]
 
 interface AddItemFormProps {
-  onAdd: (name: string, quantity: number, unit: string) => void
+  onAdd: (name: string, quantity: number, unit: string) => Promise<void>
   editingItem?: PantryItemData | null
   onCancel?: () => void
 }
@@ -37,6 +37,7 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
   const [name, setName] = useState("")
   const [quantity, setQuantity] = useState("")
   const [unit, setUnit] = useState("")
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     if (editingItem) {
@@ -50,7 +51,7 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     }
   }, [editingItem])
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!name.trim() || !quantity || !unit) return
@@ -58,10 +59,17 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     const qty = parseInt(quantity, 10)
     if (isNaN(qty) || qty < 0) return
     
-    onAdd(name.trim(), qty, unit)
-    setName("")
-    setQuantity("")
-    setUnit("")
+    try {
+      setIsLoading(true)
+      await onAdd(name.trim(), qty, unit)
+      setName("")
+      setQuantity("")
+      setUnit("")
+    } catch (err) {
+      console.log('[v0] Form error:', err)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const isEditing = !!editingItem
@@ -123,9 +131,14 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
           <Button 
             type="submit" 
             className="flex-1"
-            disabled={!name.trim() || !quantity || !unit}
+            disabled={!name.trim() || !quantity || !unit || isLoading}
           >
-            {isEditing ? (
+            {isLoading ? (
+              <>
+                <div className="h-4 w-4 mr-2 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                {isEditing ? "Updating..." : "Adding..."}
+              </>
+            ) : isEditing ? (
               <>
                 <Save className="h-4 w-4 mr-2" />
                 Update Item

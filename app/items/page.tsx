@@ -17,31 +17,48 @@ import { Empty, EmptyMedia, EmptyHeader, EmptyTitle, EmptyDescription } from "@/
 import type { PantryItemData } from "@/components/pantry-item"
 
 export default function ItemsPage() {
-  const { items, addItem, addItems, updateItem, deleteItem } = useItems()
+  const { items, addItem, addItems, updateItem, deleteItem, isLoading, error } = useItems()
   const isMobile = useIsMobile()
   const [editingItem, setEditingItem] = useState<PantryItemData | null>(null)
+  const [apiError, setApiError] = useState<string | null>(null)
 
-  const handleAddOrUpdate = (name: string, quantity: number, unit: string) => {
-    if (editingItem) {
-      updateItem(editingItem.id, name, quantity, unit)
-      setEditingItem(null)
-    } else {
-      addItem(name, quantity, unit)
+  const handleAddOrUpdate = async (name: string, quantity: number, unit: string) => {
+    try {
+      setApiError(null)
+      if (editingItem) {
+        await updateItem(editingItem.id, name, quantity, unit)
+        setEditingItem(null)
+      } else {
+        await addItem(name, quantity, unit)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An error occurred'
+      setApiError(message)
+      console.log('[v0] Add/Update error:', message)
     }
   }
 
   const handleEdit = (item: PantryItemData) => {
     setEditingItem(item)
+    setApiError(null)
   }
 
   const handleCancelEdit = () => {
     setEditingItem(null)
+    setApiError(null)
   }
 
-  const handleDelete = (id: string) => {
-    deleteItem(id)
-    if (editingItem?.id === id) {
-      setEditingItem(null)
+  const handleDelete = async (id: string) => {
+    try {
+      setApiError(null)
+      await deleteItem(id)
+      if (editingItem?.id === id) {
+        setEditingItem(null)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to delete item'
+      setApiError(message)
+      console.log('[v0] Delete error:', message)
     }
   }
 
@@ -66,6 +83,14 @@ export default function ItemsPage() {
       </header>
 
       <div className="max-w-lg mx-auto px-4 pt-6">
+        {(error || apiError) && (
+          <Card className="mb-4 border-destructive/50 bg-destructive/10">
+            <CardContent className="p-4">
+              <p className="text-sm text-destructive">{error || apiError}</p>
+            </CardContent>
+          </Card>
+        )}
+        
         <Card className="mb-6">
           <CardHeader className="pb-4">
             <CardTitle className="text-lg">
