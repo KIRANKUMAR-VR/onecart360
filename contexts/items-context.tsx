@@ -128,6 +128,10 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   }
 
   const updateItem = async (id: string, name: string, quantity: number, unit: string) => {
+    if (!id || id === 'undefined') {
+      throw new Error('Invalid item ID')
+    }
+
     try {
       setError(null)
       const response = await fetch(`/api/pantry-items/${id}`, {
@@ -162,8 +166,14 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   }
 
   const increaseQuantity = async (id: string) => {
+    if (!id || id === 'undefined') {
+      throw new Error('Invalid item ID')
+    }
+
     const item = items.find((i) => i.id === id)
-    if (!item) return
+    if (!item) {
+      throw new Error(`Item with ID ${id} not found`)
+    }
 
     try {
       await updateItem(id, item.name, item.quantity + 1, item.unit)
@@ -174,8 +184,14 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   }
 
   const decreaseQuantity = async (id: string) => {
+    if (!id || id === 'undefined') {
+      throw new Error('Invalid item ID')
+    }
+
     const item = items.find((i) => i.id === id)
-    if (!item || item.quantity <= 0) return
+    if (!item || item.quantity <= 0) {
+      throw new Error(`Item with ID ${id} not found or quantity is already 0`)
+    }
 
     try {
       await updateItem(id, item.name, item.quantity - 1, item.unit)
@@ -186,6 +202,10 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   }
 
   const deleteItem = async (id: string) => {
+    if (!id || id === 'undefined') {
+      throw new Error('Invalid item ID')
+    }
+
     try {
       setError(null)
       const response = await fetch(`/api/pantry-items/${id}`, {
@@ -210,8 +230,21 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   }
 
   const toggleStock = async (id: string, inStock: boolean) => {
+    // Validate id
+    if (!id || id === 'undefined') {
+      const message = 'Invalid item ID'
+      console.log('[v0] Toggle stock error:', message)
+      setError(message)
+      throw new Error(message)
+    }
+
     const item = items.find((i) => i.id === id)
-    if (!item) return
+    if (!item) {
+      const message = `Item with ID ${id} not found`
+      console.log('[v0] Toggle stock error:', message)
+      setError(message)
+      throw new Error(message)
+    }
 
     try {
       setError(null)
@@ -227,7 +260,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || 'Failed to toggle stock')
       }
 
