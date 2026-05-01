@@ -47,9 +47,12 @@ export default function Page() {
         },
       })
       if (error) throw error
+      console.log('[v0] Sign up successful for:', email)
       router.push('/auth/sign-up-success')
     } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : 'An error occurred')
+      const errorMessage = error instanceof Error ? error.message : 'An error occurred'
+      console.log('[v0] Sign up error:', errorMessage)
+      setError(errorMessage)
     } finally {
       setIsLoading(false)
     }
