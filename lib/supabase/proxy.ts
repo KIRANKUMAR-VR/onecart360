@@ -6,11 +6,25 @@ export async function updateSession(request: NextRequest) {
     request,
   })
 
+  // Get Supabase credentials from environment variables
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Check if required environment variables are set
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error('[v0] Missing Supabase environment variables:', {
+      url: supabaseUrl ? 'set' : 'missing',
+      anonKey: supabaseAnonKey ? 'set' : 'missing',
+    })
+    // Return the response without auth for public routes
+    return supabaseResponse
+  }
+
   // With Fluid compute, don't put this client in a global environment
   // variable. Always create a new one on each request.
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
