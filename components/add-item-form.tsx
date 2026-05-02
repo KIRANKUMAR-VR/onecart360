@@ -106,7 +106,6 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     }
 
     fetchCatalog()
-    setName("")
   }, [category])
 
   // Filter suggestions based on typed name
@@ -176,39 +175,17 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
   return (
     <form onSubmit={handleSubmit} autoComplete="off">
       <FieldGroup>
-        {/* Row 1: Category + Item Name */}
+        {/* Row 1: Item Name + Category */}
         <div className="grid grid-cols-2 gap-4">
-          <Field>
-            <FieldLabel htmlFor="category">Category</FieldLabel>
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger id="category">
-                <SelectValue placeholder="Select category" />
-              </SelectTrigger>
-              <SelectContent>
-                {CATEGORIES.map((cat) => (
-                  <SelectItem key={cat} value={cat}>
-                    {cat}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-
           <Field>
             <FieldLabel htmlFor="item-name">Item Name</FieldLabel>
             <div className="relative">
               <Input
                 id="item-name"
                 ref={inputRef}
-                placeholder={
-                  !category
-                    ? "Select category first"
-                    : isFetchingCatalog
-                    ? "Loading items..."
-                    : "Search or type item name"
-                }
+                placeholder={isFetchingCatalog ? "Loading items..." : "Search or type item name"}
                 value={name}
-                disabled={!category}
+                disabled={false}
                 onChange={(e) => setName(e.target.value)}
                 onFocus={() => {
                   if (suggestions.length > 0) setShowSuggestions(true)
@@ -244,6 +221,22 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
                 </div>
               )}
             </div>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="category">Category</FieldLabel>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="category">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </Field>
         </div>
 
