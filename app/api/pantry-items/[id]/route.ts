@@ -21,7 +21,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const { name, quantity, unit, in_stock } = body
+    const { name, quantity, unit, category, in_stock } = body
 
     // Build update object with only provided fields
     const updateData: any = {
@@ -31,6 +31,7 @@ export async function PUT(
     if (name !== undefined) updateData.name = name
     if (quantity !== undefined) updateData.quantity = quantity
     if (unit !== undefined) updateData.unit = unit
+    if (category !== undefined) updateData.category = category
     if (in_stock !== undefined) updateData.in_stock = in_stock
 
     const { data, error } = await supabase

@@ -22,19 +22,18 @@ export default function ItemsPage() {
   const [editingItem, setEditingItem] = useState<PantryItemData | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
 
-  const handleAddOrUpdate = async (name: string, quantity: number, unit: string) => {
+  const handleAddOrUpdate = async (name: string, quantity: number, unit: string, category: string) => {
     try {
       setApiError(null)
       if (editingItem) {
-        await updateItem(editingItem.id, name, quantity, unit)
+        await updateItem(editingItem.id, name, quantity, unit, category)
         setEditingItem(null)
       } else {
-        await addItem(name, quantity, unit)
+        await addItem(name, quantity, unit, category)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
       setApiError(message)
-      console.log('[v0] Add/Update error:', message)
     }
   }
 
@@ -179,7 +178,10 @@ export default function ItemsPage() {
                     <div className="flex items-center justify-between">
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">{item.name}</p>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex flex-wrap items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {item.category}
+                          </Badge>
                           <Badge variant="secondary">
                             {item.quantity} {item.unit}
                           </Badge>

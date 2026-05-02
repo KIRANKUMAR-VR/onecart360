@@ -6,9 +6,9 @@ import type { PantryItemData } from "@/components/pantry-item"
 
 interface ItemsContextType {
   items: PantryItemData[]
-  addItem: (name: string, quantity: number, unit: string) => Promise<void>
-  addItems: (items: { name: string; quantity: number; unit: string }[]) => Promise<void>
-  updateItem: (id: string, name: string, quantity: number, unit: string) => Promise<void>
+  addItem: (name: string, quantity: number, unit: string, category: string) => Promise<void>
+  addItems: (items: { name: string; quantity: number; unit: string; category: string }[]) => Promise<void>
+  updateItem: (id: string, name: string, quantity: number, unit: string, category: string) => Promise<void>
   increaseQuantity: (id: string) => Promise<void>
   decreaseQuantity: (id: string) => Promise<void>
   deleteItem: (id: string) => Promise<void>
@@ -24,6 +24,7 @@ function transformItem(item: any): PantryItemData {
   return {
     id: item.id,
     name: item.name,
+    category: item.category || 'Uncategorized',
     quantity: item.quantity,
     unit: item.unit,
     inStock: item.in_stock,
@@ -74,11 +75,11 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const addItem = async (name: string, quantity: number, unit: string) => {
+  const addItem = async (name: string, quantity: number, unit: string, category: string) => {
     const response = await fetch('/api/pantry-items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, quantity, unit }),
+      body: JSON.stringify({ name, quantity, unit, category }),
     })
 
     if (!response.ok) {
@@ -90,7 +91,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     setItems((prev) => [transformItem(data), ...prev])
   }
 
-  const addItems = async (newItems: { name: string; quantity: number; unit: string }[]) => {
+  const addItems = async (newItems: { name: string; quantity: number; unit: string; category: string }[]) => {
     const responses = await Promise.all(
       newItems.map((item) =>
         fetch('/api/pantry-items', {
@@ -111,11 +112,11 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     setItems((prev) => [...added, ...prev])
   }
 
-  const updateItem = async (id: string, name: string, quantity: number, unit: string) => {
+  const updateItem = async (id: string, name: string, quantity: number, unit: string, category: string) => {
     const response = await fetch(`/api/pantry-items/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, quantity, unit }),
+      body: JSON.stringify({ name, quantity, unit, category }),
     })
 
     if (!response.ok) {
@@ -127,7 +128,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
-          ? { ...item, name: data.name, quantity: data.quantity, unit: data.unit }
+          ? { ...item, name: data.name, category: data.category, quantity: data.quantity, unit: data.unit }
           : item
       )
     )
@@ -136,13 +137,13 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   const increaseQuantity = async (id: string) => {
     const item = items.find((i) => i.id === id)
     if (!item) return
-    await updateItem(id, item.name, item.quantity + 1, item.unit)
+    await updateItem(id, item.name, item.quantity + 1, item.unit, item.category)
   }
 
   const decreaseQuantity = async (id: string) => {
     const item = items.find((i) => i.id === id)
     if (!item || item.quantity <= 0) return
-    await updateItem(id, item.name, item.quantity - 1, item.unit)
+    await updateItem(id, item.name, item.quantity - 1, item.unit, item.category)
   }
 
   const deleteItem = async (id: string) => {

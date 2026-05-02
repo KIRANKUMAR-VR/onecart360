@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils"
 export interface PantryItemData {
   id: string
   name: string
+  category: string
   quantity: number
   unit: string
   inStock: boolean
