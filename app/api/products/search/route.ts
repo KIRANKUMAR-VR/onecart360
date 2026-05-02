@@ -3,19 +3,15 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser()
-    if (userError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     const { searchParams } = new URL(request.url)
     const query = searchParams.get("query")?.trim()
 
-    if (!query || query.length < 1) {
+    if (!query || query.length < 2) {
       return NextResponse.json([])
     }
+
+    // product_catalog is a public reference table — no auth needed
+    const supabase = await createClient()
 
     const { data, error } = await supabase
       .from("product_catalog")
@@ -26,11 +22,13 @@ export async function GET(request: NextRequest) {
       .limit(10)
 
     if (error) {
+      console.error("[v0] product catalog search error:", error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
     return NextResponse.json(data || [])
-  } catch {
+  } catch (err) {
+    console.error("[v0] product catalog search exception:", err)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

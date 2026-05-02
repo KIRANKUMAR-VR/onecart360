@@ -117,11 +117,17 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
       if (res.ok) {
         const data: CatalogItem[] = await res.json()
         setSuggestions(data)
-        setShowSuggestions(data.length > 0)
+        setShowSuggestions(true)
         setActiveIndex(-1)
+      } else {
+        console.error("[v0] search API error:", res.status, await res.text())
+        setSuggestions([])
+        setShowSuggestions(false)
       }
-    } catch {
-      // silently fail — user can still type manually
+    } catch (err) {
+      console.error("[v0] search fetch error:", err)
+      setSuggestions([])
+      setShowSuggestions(false)
     } finally {
       setIsSearching(false)
     }
