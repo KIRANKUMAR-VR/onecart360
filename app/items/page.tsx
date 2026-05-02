@@ -21,6 +21,12 @@ export default function ItemsPage() {
   const isMobile = useIsMobile()
   const [editingItem, setEditingItem] = useState<PantryItemData | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
+  const showSuccess = (msg: string) => {
+    setSuccessMessage(msg)
+    setTimeout(() => setSuccessMessage(null), 3000)
+  }
 
   const handleAddOrUpdate = async (name: string, quantity: number, unit: string, category: string) => {
     try {
@@ -28,8 +34,10 @@ export default function ItemsPage() {
       if (editingItem) {
         await updateItem(editingItem.id, name, quantity, unit, category)
         setEditingItem(null)
+        showSuccess('Item updated successfully.')
       } else {
-        await addItem(name, quantity, unit, category)
+        const { wasUpdated } = await addItem(name, quantity, unit, category)
+        showSuccess(wasUpdated ? 'Item already exists. Updated successfully.' : 'Item added successfully.')
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'An error occurred'
@@ -82,6 +90,14 @@ export default function ItemsPage() {
       </header>
 
       <div className="max-w-lg mx-auto px-4 pt-6">
+        {successMessage && (
+          <Card className="mb-4 border-green-500/50 bg-green-500/10">
+            <CardContent className="p-4">
+              <p className="text-sm text-green-700 dark:text-green-400">{successMessage}</p>
+            </CardContent>
+          </Card>
+        )}
+
         {(error || apiError) && (
           <Card className="mb-4 border-destructive/50 bg-destructive/10">
             <CardContent className="p-4">
