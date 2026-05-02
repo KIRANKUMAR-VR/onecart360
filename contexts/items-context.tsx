@@ -234,21 +234,23 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     return items.find((item) => item.id === id)
   }
 
-  const toggleStock = async (id: string, inStock: boolean) => {
+  const toggleStock = async (id: string, inStock: boolean): Promise<void> => {
     // Validate id
     if (!id || id === 'undefined') {
-      console.log('[v0] Toggle stock error: Invalid item ID')
-      return
+      console.error('[v0] Toggle stock error: Invalid item ID')
+      throw new Error('Invalid item ID')
     }
 
     const item = items.find((i) => i.id === id)
     if (!item) {
-      console.log('[v0] Toggle stock error: Item with ID', id, 'not found')
-      return
+      console.error('[v0] Toggle stock error: Item with ID', id, 'not found')
+      throw new Error('Item not found')
     }
 
     try {
       setError(null)
+      console.log('[v0] Toggling stock for item:', id, 'to:', inStock)
+      
       const response = await fetch(`/api/pantry-items/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -262,10 +264,12 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || 'Failed to toggle stock')
+        throw new Error(errorData.error || `Failed to toggle stock: ${response.status}`)
       }
 
       const data = await response.json()
+      console.log('[v0] Stock toggled successfully:', data)
+      
       setItems((prev) =>
         prev.map((i) =>
           i.id === id ? { ...i, inStock: data.in_stock !== undefined ? data.in_stock : inStock } : i
@@ -273,8 +277,9 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       )
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to toggle stock'
-      console.log('[v0] Toggle stock error:', message)
+      console.error('[v0] Toggle stock error:', message)
       setError(message)
+      throw err
     }
   }
 
