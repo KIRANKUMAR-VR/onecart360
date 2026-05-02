@@ -56,12 +56,13 @@ interface AddItemFormProps {
 
 function highlightMatch(text: string, query: string) {
   if (!query.trim()) return <span>{text}</span>
-  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+  const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+  const regex = new RegExp(`(${escaped})`, "gi")
   const parts = text.split(regex)
   return (
     <>
       {parts.map((part, i) =>
-        regex.test(part) ? (
+        part.toLowerCase() === query.toLowerCase() ? (
           <mark key={i} className="bg-primary/20 text-primary font-semibold rounded-sm px-0.5">
             {part}
           </mark>
@@ -109,26 +110,23 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     if (!query || query.length < 2 || query.length > 50) {
       setSuggestions([])
       setShowSuggestions(false)
+      setIsSearching(false)
       return
     }
 
     setIsSearching(true)
+    setShowSuggestions(true) // keep dropdown open while searching
     try {
       const res = await fetch(`/api/products/search?query=${encodeURIComponent(query)}`)
       if (res.ok) {
         const data: CatalogItem[] = await res.json()
         setSuggestions(data)
-        setShowSuggestions(true)
         setActiveIndex(-1)
       } else {
-        console.error("[v0] search API error:", res.status, await res.text())
         setSuggestions([])
-        setShowSuggestions(false)
       }
-    } catch (err) {
-      console.error("[v0] search fetch error:", err)
+    } catch {
       setSuggestions([])
-      setShowSuggestions(false)
     } finally {
       setIsSearching(false)
     }
@@ -270,9 +268,9 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
                       <div className="h-3 w-3 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
                       Searching...
                     </div>
-                  ) : suggestions.length === 0 ? (
+                  ) : !isSearching && suggestions.length === 0 ? (
                     <div className="px-3 py-2.5 text-sm text-muted-foreground">
-                      No results found
+                      No results found for &quot;{name}&quot;
                     </div>
                   ) : (
                     <ul className="max-h-52 overflow-y-auto py-1">
