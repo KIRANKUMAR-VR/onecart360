@@ -10,7 +10,7 @@ interface PantryListProps {
   onDecrease?: (id: string) => void
   onDelete?: (id: string) => void
   onEdit?: (id: string) => void
-  onToggleStock?: (id: string, inStock: boolean) => void
+  onToggleStock?: (id: string, inStock: boolean) => Promise<void>
   readOnly?: boolean
   showStockToggle?: boolean
 }

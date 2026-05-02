@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import { Plus, Minus, Trash2, Pencil } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -21,13 +22,25 @@ interface PantryItemProps {
   onDecrease?: (id: string) => void
   onDelete?: (id: string) => void
   onEdit?: (id: string) => void
-  onToggleStock?: (id: string, inStock: boolean) => void
+  onToggleStock?: (id: string, inStock: boolean) => Promise<void>
   readOnly?: boolean
   showStockToggle?: boolean
 }
 
 export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onToggleStock, readOnly = false, showStockToggle = false }: PantryItemProps) {
+  const [isTogglingStock, setIsTogglingStock] = useState(false)
   const isLowStock = item.quantity <= 1 || !item.inStock
+  
+  const handleToggleStock = async (checked: boolean) => {
+    try {
+      setIsTogglingStock(true)
+      await onToggleStock?.(item.id, checked)
+    } catch (err) {
+      console.error('[v0] Toggle stock error:', err)
+    } finally {
+      setIsTogglingStock(false)
+    }
+  }
 
   return (
     <Card
@@ -54,23 +67,19 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
             <Switch
               id={`stock-toggle-${item.id}`}
               checked={item.inStock}
-              onCheckedChange={(checked) => {
-                if (!item.id) {
-                  console.error('[v0] Cannot toggle stock: item.id is undefined')
-                  return
-                }
-                onToggleStock(item.id, checked)
-              }}
+              disabled={isTogglingStock}
+              onCheckedChange={handleToggleStock}
               aria-label={`Toggle stock for ${item.name}`}
             />
             <Label 
               htmlFor={`stock-toggle-${item.id}`}
               className={cn(
                 "text-sm font-medium cursor-pointer",
-                item.inStock ? "text-primary" : "text-muted-foreground"
+                item.inStock ? "text-primary" : "text-muted-foreground",
+                isTogglingStock && "opacity-50"
               )}
             >
-              {item.inStock ? "In Stock" : "Out of Stock"}
+              {isTogglingStock ? "Updating..." : item.inStock ? "In Stock" : "Out of Stock"}
             </Label>
           </div>
         )}
