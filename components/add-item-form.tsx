@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Plus, Save, ChevronDown } from "lucide-react"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { Plus, Save, Search, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
@@ -36,7 +36,7 @@ const UNITS = [
   { value: "bottles", label: "bottles" },
   { value: "cans", label: "cans" },
   { value: "boxes", label: "boxes" },
-  { value: "pieces", label: "pieces" },
+  { value: "pcs", label: "pcs" },
   { value: "dozen", label: "dozen" },
 ]
 
@@ -54,6 +54,25 @@ interface AddItemFormProps {
   onCancel?: () => void
 }
 
+function highlightMatch(text: string, query: string) {
+  if (!query.trim()) return <span>{text}</span>
+  const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi")
+  const parts = text.split(regex)
+  return (
+    <>
+      {parts.map((part, i) =>
+        regex.test(part) ? (
+          <mark key={i} className="bg-primary/20 text-primary font-semibold rounded-sm px-0.5">
+            {part}
+          </mark>
+        ) : (
+          <span key={i}>{part}</span>
+        )
+      )}
+    </>
+  )
+}
+
 export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) {
   const [name, setName] = useState("")
   const [category, setCategory] = useState("")
@@ -61,12 +80,14 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
   const [unit, setUnit] = useState("")
   const [isLoading, setIsLoading] = useState(false)
 
-  const [catalogItems, setCatalogItems] = useState<CatalogItem[]>([])
   const [suggestions, setSuggestions] = useState<CatalogItem[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [isFetchingCatalog, setIsFetchingCatalog] = useState(false)
+  const [isSearching, setIsSearching] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
+
   const suggestionsRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (editingItem) {
@@ -82,48 +103,67 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     }
   }, [editingItem])
 
-  // Fetch catalog items when category changes
-  useEffect(() => {
-    if (!category || category === "Others") {
-      setCatalogItems([])
-      setSuggestions([])
-      return
-    }
-
-    const fetchCatalog = async () => {
-      setIsFetchingCatalog(true)
-      try {
-        const res = await fetch(`/api/product-catalog?category=${encodeURIComponent(category)}`)
-        if (res.ok) {
-          const data = await res.json()
-          setCatalogItems(data)
-        }
-      } catch {
-        // silently fail — user can still type manually
-      } finally {
-        setIsFetchingCatalog(false)
-      }
-    }
-
-    fetchCatalog()
-  }, [category])
-
-  // Filter suggestions based on typed name
-  useEffect(() => {
-    if (!name.trim() || catalogItems.length === 0) {
+  // Debounced search — fires 300ms after user stops typing
+  const searchCatalog = useCallback(async (query: string) => {
+    if (!query.trim() || query.length < 2) {
       setSuggestions([])
       setShowSuggestions(false)
       return
     }
 
-    const filtered = catalogItems.filter((item) =>
-      item.item_name.toLowerCase().includes(name.toLowerCase())
-    )
-    setSuggestions(filtered)
-    setShowSuggestions(filtered.length > 0)
-  }, [name, catalogItems])
+    setIsSearching(true)
+    try {
+      const res = await fetch(`/api/products/search?query=${encodeURIComponent(query)}`)
+      if (res.ok) {
+        const data: CatalogItem[] = await res.json()
+        setSuggestions(data)
+        setShowSuggestions(data.length > 0)
+        setActiveIndex(-1)
+      }
+    } catch {
+      // silently fail — user can still type manually
+    } finally {
+      setIsSearching(false)
+    }
+  }, [])
 
-  // Close suggestions on outside click
+  const handleNameChange = (value: string) => {
+    setName(value)
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => searchCatalog(value), 300)
+  }
+
+  // Keyboard navigation
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions) return
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setActiveIndex((prev) => Math.min(prev + 1, suggestions.length - 1))
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setActiveIndex((prev) => Math.max(prev - 1, -1))
+    } else if (e.key === "Enter" && activeIndex >= 0) {
+      e.preventDefault()
+      handleSelectSuggestion(suggestions[activeIndex])
+    } else if (e.key === "Escape") {
+      setShowSuggestions(false)
+      setActiveIndex(-1)
+    }
+  }
+
+  const handleSelectSuggestion = (item: CatalogItem) => {
+    setName(item.item_name)
+    setCategory(item.category)
+    setQuantity(String(item.quantity))
+    setUnit(item.unit)
+    setSuggestions([])
+    setShowSuggestions(false)
+    setActiveIndex(-1)
+  }
+
+  // Close on outside click
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (
@@ -139,13 +179,12 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const handleSelectSuggestion = (item: CatalogItem) => {
-    setName(item.item_name)
-    setQuantity(String(item.quantity))
-    setUnit(item.unit)
-    setShowSuggestions(false)
-    inputRef.current?.blur()
-  }
+  // Cleanup debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -162,7 +201,7 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
       setCategory("")
       setQuantity("")
       setUnit("")
-      setCatalogItems([])
+      setSuggestions([])
     } catch {
       // error handled by parent
     } finally {
@@ -180,44 +219,89 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
           <Field>
             <FieldLabel htmlFor="item-name">Item Name</FieldLabel>
             <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
               <Input
                 id="item-name"
                 ref={inputRef}
-                placeholder={isFetchingCatalog ? "Loading items..." : "Search or type item name"}
+                placeholder="Search or type item name"
                 value={name}
-                disabled={false}
-                onChange={(e) => setName(e.target.value)}
+                onChange={(e) => handleNameChange(e.target.value)}
+                onKeyDown={handleKeyDown}
                 onFocus={() => {
                   if (suggestions.length > 0) setShowSuggestions(true)
-                  else if (name === "" && catalogItems.length > 0) {
-                    setSuggestions(catalogItems)
-                    setShowSuggestions(true)
-                  }
                 }}
+                className="pl-9 pr-8"
                 autoComplete="off"
               />
-              {/* Dropdown suggestions */}
-              {showSuggestions && suggestions.length > 0 && (
+              {name && (
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setName("")
+                    setSuggestions([])
+                    setShowSuggestions(false)
+                    inputRef.current?.focus()
+                  }}
+                  tabIndex={-1}
+                  aria-label="Clear item name"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+
+              {/* Suggestions dropdown */}
+              {showSuggestions && (
                 <div
                   ref={suggestionsRef}
-                  className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-md max-h-48 overflow-y-auto"
+                  role="listbox"
+                  aria-label="Item suggestions"
+                  className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-md shadow-lg overflow-hidden"
                 >
-                  {suggestions.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center justify-between gap-2 transition-colors"
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                        handleSelectSuggestion(item)
-                      }}
-                    >
-                      <span>{item.item_name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">
-                        {item.quantity} {item.unit}
-                      </span>
-                    </button>
-                  ))}
+                  {isSearching ? (
+                    <div className="px-3 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
+                      <div className="h-3 w-3 border-2 border-muted-foreground border-t-transparent rounded-full animate-spin" />
+                      Searching...
+                    </div>
+                  ) : suggestions.length === 0 ? (
+                    <div className="px-3 py-2.5 text-sm text-muted-foreground">
+                      No results found
+                    </div>
+                  ) : (
+                    <ul className="max-h-52 overflow-y-auto py-1">
+                      {suggestions.map((item, index) => (
+                        <li key={item.id}>
+                          <button
+                            type="button"
+                            role="option"
+                            aria-selected={index === activeIndex}
+                            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-3 transition-colors ${
+                              index === activeIndex
+                                ? "bg-accent text-accent-foreground"
+                                : "hover:bg-accent hover:text-accent-foreground"
+                            }`}
+                            onMouseDown={(e) => {
+                              e.preventDefault()
+                              handleSelectSuggestion(item)
+                            }}
+                            onMouseEnter={() => setActiveIndex(index)}
+                          >
+                            <div className="flex flex-col min-w-0">
+                              <span className="font-medium truncate">
+                                {highlightMatch(item.item_name, name)}
+                              </span>
+                              <span className="text-xs text-muted-foreground truncate">
+                                {item.category}
+                              </span>
+                            </div>
+                            <span className="text-xs text-muted-foreground shrink-0 tabular-nums">
+                              {item.quantity} {item.unit}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>
@@ -275,12 +359,7 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
         {/* Actions */}
         <div className="flex gap-2">
           {onCancel && (
-            <Button
-              type="button"
-              variant="outline"
-              className="flex-1"
-              onClick={onCancel}
-            >
+            <Button type="button" variant="outline" className="flex-1" onClick={onCancel}>
               Cancel
             </Button>
           )}
