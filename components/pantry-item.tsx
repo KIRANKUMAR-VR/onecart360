@@ -22,7 +22,7 @@ interface PantryItemProps {
   onDecrease?: (id: string) => void
   onDelete?: (id: string) => void
   onEdit?: (id: string) => void
-  onToggleStock?: (id: string, inStock: boolean) => void
+  onToggleStock?: (id: string, inStock: boolean) => Promise<void>
   readOnly?: boolean
   showStockToggle?: boolean
 }
@@ -32,13 +32,6 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
   const isLowStock = item.quantity <= 1 || !item.inStock
   
   const handleToggleStock = async (checked: boolean) => {
-    console.log('[v0] handleToggleStock called:', { itemId: item.id, itemIdType: typeof item.id, checked, item })
-    
-    if (!item.id || item.id === 'undefined') {
-      console.error('[v0] Cannot toggle stock: item.id is invalid', { itemId: item.id })
-      return
-    }
-    
     try {
       setIsTogglingStock(true)
       await onToggleStock?.(item.id, checked)
