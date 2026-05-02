@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createClient } from "@/lib/supabase/client"
 import type { PantryItemData } from "@/components/pantry-item"
 
 interface ItemsContextType {
@@ -34,8 +35,19 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  // Wait for a confirmed Supabase session before fetching items.
+  // Using onAuthStateChange ensures cookies are set before the first API call.
   useEffect(() => {
-    fetchItems()
+    const supabase = createClient()
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        fetchItems()
+      } else {
+        setItems([])
+        setIsLoading(false)
+      }
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
   const fetchItems = async () => {
