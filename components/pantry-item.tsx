@@ -32,8 +32,10 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
   const isLowStock = item.quantity <= 1 || !item.inStock
   
   const handleToggleStock = async (checked: boolean) => {
-    if (!item.id) {
-      console.error('[v0] Cannot toggle stock: item.id is undefined')
+    console.log('[v0] handleToggleStock called:', { itemId: item.id, itemIdType: typeof item.id, checked, item })
+    
+    if (!item.id || item.id === 'undefined') {
+      console.error('[v0] Cannot toggle stock: item.id is invalid', { itemId: item.id })
       return
     }
     

@@ -235,15 +235,17 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   }
 
   const toggleStock = async (id: string, inStock: boolean): Promise<void> => {
+    console.log('[v0] toggleStock called with:', { id, idType: typeof id, inStock, allItems: items.map(i => ({ id: i.id, name: i.name })) })
+    
     // Validate id
     if (!id || id === 'undefined') {
-      console.error('[v0] Toggle stock error: Invalid item ID')
+      console.error('[v0] Toggle stock error: Invalid item ID - id is:', id, 'type:', typeof id)
       throw new Error('Invalid item ID')
     }
 
     const item = items.find((i) => i.id === id)
     if (!item) {
-      console.error('[v0] Toggle stock error: Item with ID', id, 'not found')
+      console.error('[v0] Toggle stock error: Item with ID', id, 'not found in items:', items.map(i => i.id))
       throw new Error('Item not found')
     }
 
