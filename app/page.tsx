@@ -22,8 +22,6 @@ export default function Home() {
   const inStockItems = items.filter((item) => item.inStock)
   const outOfStockItems = items.filter((item) => !item.inStock)
 
-  console.log('[v0] Dashboard - Loading:', isLoading, 'Items:', items.length, 'Error:', error)
-
   return (
     <main className="min-h-screen pb-8">
       <header className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b">

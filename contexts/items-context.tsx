@@ -29,15 +29,14 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     fetchItems()
   }, [])
 
-  const fetchItems = async (retryCount = 0) => {
+  const fetchItems = async () => {
     try {
       setIsLoading(true)
       setError(null)
-      const response = await fetch('/api/pantry-items')
+      const response = await fetch('/api/pantry-items', { cache: 'no-store' })
       
       if (!response.ok) {
         if (response.status === 401) {
-          console.log('[v0] Not authenticated, items will be empty')
           setItems([])
           setIsLoading(false)
           return
@@ -46,7 +45,6 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       }
       
       const data = await response.json()
-      console.log('[v0] Fetched items:', data?.length || 0)
       const transformedItems: PantryItemData[] = (data || []).map((item: any) => ({
         id: item.id,
         name: item.name,
@@ -57,19 +55,9 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       setItems(transformedItems)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch items'
-      console.log('[v0] Fetch items error:', message, 'Retry count:', retryCount)
-      
-      // Retry once after a delay if we haven't already
-      if (retryCount < 1) {
-        setTimeout(() => fetchItems(retryCount + 1), 1000)
-        return
-      }
-      
       setError(message)
     } finally {
-      if (retryCount === 0) {
-        setIsLoading(false)
-      }
+      setIsLoading(false)
     }
   }
 
@@ -106,15 +94,20 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   const addItems = async (newItems: { name: string; quantity: number; unit: string }[]) => {
     try {
       setError(null)
+      
+      // Add all items in parallel for faster performance
+      const responses = await Promise.all(
+        newItems.map((item) =>
+          fetch('/api/pantry-items', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+          })
+        )
+      )
+
       const addedItems: PantryItemData[] = []
-
-      for (const item of newItems) {
-        const response = await fetch('/api/pantry-items', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item),
-        })
-
+      for (const response of responses) {
         if (!response.ok) {
           throw new Error('Failed to add item')
         }
@@ -132,7 +125,6 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       setItems((prev) => [...addedItems, ...prev])
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to add items'
-      console.log('[v0] Add items error:', message)
       setError(message)
       throw err
     }
