@@ -109,13 +109,11 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     const query = rawQuery.trim()
     if (!query || query.length < 2 || query.length > 50) {
       setSuggestions([])
-      setShowSuggestions(false)
       setIsSearching(false)
       return
     }
 
     setIsSearching(true)
-    setShowSuggestions(true) // keep dropdown open while searching
     try {
       const res = await fetch(`/api/products/search?query=${encodeURIComponent(query)}`)
       if (res.ok) {
@@ -136,6 +134,17 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
     setName(value)
 
     if (debounceRef.current) clearTimeout(debounceRef.current)
+
+    if (!value.trim() || value.trim().length < 2) {
+      setSuggestions([])
+      setShowSuggestions(false)
+      setIsSearching(false)
+      return
+    }
+
+    // Show dropdown immediately with loading spinner, then fill results
+    setShowSuggestions(true)
+    setIsSearching(true)
     debounceRef.current = setTimeout(() => searchCatalog(value), 300)
   }
 

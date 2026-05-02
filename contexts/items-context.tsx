@@ -6,7 +6,7 @@ import type { PantryItemData } from "@/components/pantry-item"
 
 interface ItemsContextType {
   items: PantryItemData[]
-  addItem: (name: string, quantity: number, unit: string, category: string) => Promise<{ wasUpdated: boolean }>
+  addItem: (name: string, quantity: number, unit: string, category: string) => Promise<void>
   addItems: (items: { name: string; quantity: number; unit: string; category: string }[]) => Promise<void>
   updateItem: (id: string, name: string, quantity: number, unit: string, category: string) => Promise<void>
   increaseQuantity: (id: string) => Promise<void>
@@ -75,7 +75,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  const addItem = async (name: string, quantity: number, unit: string, category: string): Promise<{ wasUpdated: boolean }> => {
+  const addItem = async (name: string, quantity: number, unit: string, category: string) => {
     const response = await fetch('/api/pantry-items', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -88,17 +88,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await response.json()
-    const transformed = transformItem(data)
-
-    if (data.wasUpdated) {
-      // Replace the existing item in state
-      setItems((prev) => prev.map((i) => i.id === transformed.id ? transformed : i))
-    } else {
-      // Prepend the new item
-      setItems((prev) => [transformed, ...prev])
-    }
-
-    return { wasUpdated: !!data.wasUpdated }
+    setItems((prev) => [transformItem(data), ...prev])
   }
 
   const addItems = async (newItems: { name: string; quantity: number; unit: string; category: string }[]) => {
