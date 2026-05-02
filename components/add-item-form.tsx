@@ -24,6 +24,7 @@ const CATEGORIES = [
   "Household Essentials",
   "Personal Care",
   "Beverages",
+  "Others",
 ]
 
 const UNITS = [
