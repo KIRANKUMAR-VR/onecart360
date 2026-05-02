@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase/server"
+import { createClient as createSupabaseClient } from "@supabase/supabase-js"
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,8 +10,11 @@ export async function GET(request: NextRequest) {
       return NextResponse.json([])
     }
 
-    // product_catalog is a public reference table — no auth needed
-    const supabase = await createClient()
+    // product_catalog is a public reference table — use anon client, no session needed
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 
     const { data, error } = await supabase
       .from("product_catalog")
