@@ -8,9 +8,11 @@ export async function GET(request: NextRequest) {
     const { data: { user }, error: userError } = await supabase.auth.getUser()
     
     if (userError || !user) {
-      console.log('[v0] GET /api/pantry-items: Unauthorized')
+      console.error('[v0] GET /api/pantry-items: Unauthorized -', userError?.message || 'No user')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+
+    console.log('[v0] GET /api/pantry-items: Fetching for user:', user.id)
 
     const { data, error } = await supabase
       .from('pantry_items')
@@ -19,11 +21,11 @@ export async function GET(request: NextRequest) {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.log('[v0] GET /api/pantry-items: Database error:', error)
+      console.error('[v0] GET /api/pantry-items: Database error:', error.message)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log('[v0] GET /api/pantry-items: Retrieved', data?.length || 0, 'items')
+    console.log('[v0] GET /api/pantry-items: Retrieved', data?.length || 0, 'items for user', user.id)
     return NextResponse.json(data || [])
   } catch (err) {
     console.error('[v0] GET /api/pantry-items: Server error:', err)

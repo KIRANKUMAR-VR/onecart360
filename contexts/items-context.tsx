@@ -29,7 +29,7 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
     fetchItems()
   }, [])
 
-  const fetchItems = async () => {
+  const fetchItems = async (retryCount = 0) => {
     try {
       setIsLoading(true)
       setError(null)
@@ -39,13 +39,15 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
         if (response.status === 401) {
           console.log('[v0] Not authenticated, items will be empty')
           setItems([])
+          setIsLoading(false)
           return
         }
-        throw new Error('Failed to fetch items')
+        throw new Error(`Failed to fetch items: ${response.status}`)
       }
       
       const data = await response.json()
-      const transformedItems: PantryItemData[] = data.map((item: any) => ({
+      console.log('[v0] Fetched items:', data?.length || 0)
+      const transformedItems: PantryItemData[] = (data || []).map((item: any) => ({
         id: item.id,
         name: item.name,
         quantity: item.quantity,
@@ -55,10 +57,19 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       setItems(transformedItems)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch items'
-      console.log('[v0] Fetch items error:', message)
+      console.log('[v0] Fetch items error:', message, 'Retry count:', retryCount)
+      
+      // Retry once after a delay if we haven't already
+      if (retryCount < 1) {
+        setTimeout(() => fetchItems(retryCount + 1), 1000)
+        return
+      }
+      
       setError(message)
     } finally {
-      setIsLoading(false)
+      if (retryCount === 0) {
+        setIsLoading(false)
+      }
     }
   }
 

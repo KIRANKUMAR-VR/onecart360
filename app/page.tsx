@@ -14,13 +14,15 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/component
 import { cn } from "@/lib/utils"
 
 export default function Home() {
-  const { items, toggleStock, addItems } = useItems()
+  const { items, toggleStock, addItems, isLoading, error } = useItems()
   const isMobile = useIsMobile()
   const [stockInOpen, setStockInOpen] = useState(true)
   const [stockOutOpen, setStockOutOpen] = useState(true)
 
   const inStockItems = items.filter((item) => item.inStock)
   const outOfStockItems = items.filter((item) => !item.inStock)
+
+  console.log('[v0] Dashboard - Loading:', isLoading, 'Items:', items.length, 'Error:', error)
 
   return (
     <main className="min-h-screen pb-8">
@@ -60,6 +62,32 @@ export default function Home() {
       </header>
 
       <div className="max-w-lg mx-auto px-4 pt-6 flex flex-col gap-4">
+        {isLoading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">Loading your items...</p>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="p-4 rounded-lg bg-destructive/10 border border-destructive/20">
+            <p className="text-sm text-destructive">Error: {error}</p>
+          </div>
+        )}
+
+        {!isLoading && items.length === 0 && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <Package className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
+              <p className="text-muted-foreground">No items yet. Add some to get started!</p>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && items.length > 0 && (
+          <>
         {/* Stock Out Category */}
         <Collapsible open={stockOutOpen} onOpenChange={setStockOutOpen}>
           <CollapsibleTrigger asChild>
@@ -107,6 +135,8 @@ export default function Home() {
             />
           </CollapsibleContent>
         </Collapsible>
+          </>
+        )}
       </div>
     </main>
   )
