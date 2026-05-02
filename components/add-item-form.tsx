@@ -104,8 +104,9 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
   }, [editingItem])
 
   // Debounced search — fires 300ms after user stops typing
-  const searchCatalog = useCallback(async (query: string) => {
-    if (!query.trim() || query.length < 2) {
+  const searchCatalog = useCallback(async (rawQuery: string) => {
+    const query = rawQuery.trim()
+    if (!query || query.length < 2 || query.length > 50) {
       setSuggestions([])
       setShowSuggestions(false)
       return
