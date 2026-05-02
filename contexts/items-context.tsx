@@ -170,37 +170,39 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
 
   const increaseQuantity = async (id: string) => {
     if (!id || id === 'undefined') {
-      throw new Error('Invalid item ID')
+      console.log('[v0] Increase quantity error: Invalid item ID')
+      return
     }
 
     const item = items.find((i) => i.id === id)
     if (!item) {
-      throw new Error(`Item with ID ${id} not found`)
+      console.log('[v0] Increase quantity error: Item not found')
+      return
     }
 
     try {
       await updateItem(id, item.name, item.quantity + 1, item.unit)
     } catch (err) {
       console.log('[v0] Increase quantity error:', err)
-      throw err
     }
   }
 
   const decreaseQuantity = async (id: string) => {
     if (!id || id === 'undefined') {
-      throw new Error('Invalid item ID')
+      console.log('[v0] Decrease quantity error: Invalid item ID')
+      return
     }
 
     const item = items.find((i) => i.id === id)
     if (!item || item.quantity <= 0) {
-      throw new Error(`Item with ID ${id} not found or quantity is already 0`)
+      console.log('[v0] Decrease quantity error: Item not found or quantity is 0')
+      return
     }
 
     try {
       await updateItem(id, item.name, item.quantity - 1, item.unit)
     } catch (err) {
       console.log('[v0] Decrease quantity error:', err)
-      throw err
     }
   }
 
@@ -235,18 +237,14 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
   const toggleStock = async (id: string, inStock: boolean) => {
     // Validate id
     if (!id || id === 'undefined') {
-      const message = 'Invalid item ID'
-      console.log('[v0] Toggle stock error:', message)
-      setError(message)
-      throw new Error(message)
+      console.log('[v0] Toggle stock error: Invalid item ID')
+      return
     }
 
     const item = items.find((i) => i.id === id)
     if (!item) {
-      const message = `Item with ID ${id} not found`
-      console.log('[v0] Toggle stock error:', message)
-      setError(message)
-      throw new Error(message)
+      console.log('[v0] Toggle stock error: Item with ID', id, 'not found')
+      return
     }
 
     try {
@@ -277,7 +275,6 @@ export function ItemsProvider({ children }: { children: ReactNode }) {
       const message = err instanceof Error ? err.message : 'Failed to toggle stock'
       console.log('[v0] Toggle stock error:', message)
       setError(message)
-      throw err
     }
   }
 
