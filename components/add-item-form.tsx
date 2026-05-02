@@ -14,6 +14,18 @@ import {
 import { FieldGroup, Field, FieldLabel } from "@/components/ui/field"
 import type { PantryItemData } from "./pantry-item"
 
+const CATEGORIES = [
+  "Fruits & Vegetables",
+  "Staples & Grains",
+  "Pulses & Lentils",
+  "Oils & Spices",
+  "Dairy & Bakery",
+  "Snacks & Packaged Food",
+  "Household Essentials",
+  "Personal Care",
+  "Beverages",
+]
+
 const UNITS = [
   { value: "kg", label: "kg" },
   { value: "g", label: "g" },
@@ -28,13 +40,14 @@ const UNITS = [
 ]
 
 interface AddItemFormProps {
-  onAdd: (name: string, quantity: number, unit: string) => Promise<void>
+  onAdd: (name: string, quantity: number, unit: string, category: string) => Promise<void>
   editingItem?: PantryItemData | null
   onCancel?: () => void
 }
 
 export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) {
   const [name, setName] = useState("")
+  const [category, setCategory] = useState("")
   const [quantity, setQuantity] = useState("")
   const [unit, setUnit] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -42,10 +55,12 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
   useEffect(() => {
     if (editingItem) {
       setName(editingItem.name)
+      setCategory(editingItem.category || "")
       setQuantity(String(editingItem.quantity))
       setUnit(editingItem.unit)
     } else {
       setName("")
+      setCategory("")
       setQuantity("")
       setUnit("")
     }
@@ -54,19 +69,20 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    if (!name.trim() || !quantity || !unit) return
+    if (!name.trim() || !category || !quantity || !unit) return
     
     const qty = parseInt(quantity, 10)
     if (isNaN(qty) || qty < 0) return
     
     try {
       setIsLoading(true)
-      await onAdd(name.trim(), qty, unit)
+      await onAdd(name.trim(), qty, unit, category)
       setName("")
+      setCategory("")
       setQuantity("")
       setUnit("")
     } catch (err) {
-      console.log('[v0] Form error:', err)
+      // error handled by parent
     } finally {
       setIsLoading(false)
     }
@@ -77,16 +93,34 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
   return (
     <form onSubmit={handleSubmit}>
       <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="item-name">Item Name</FieldLabel>
-          <Input
-            id="item-name"
-            placeholder="e.g., Rice, Milk, Eggs"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </Field>
-        
+        <div className="grid grid-cols-2 gap-4">
+          <Field>
+            <FieldLabel htmlFor="item-name">Item Name</FieldLabel>
+            <Input
+              id="item-name"
+              placeholder="e.g., Rice, Milk, Eggs"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="category">Category</FieldLabel>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger id="category">
+                <SelectValue placeholder="Select category" />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map((cat) => (
+                  <SelectItem key={cat} value={cat}>
+                    {cat}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <Field>
             <FieldLabel htmlFor="quantity">Quantity</FieldLabel>
@@ -131,7 +165,7 @@ export function AddItemForm({ onAdd, editingItem, onCancel }: AddItemFormProps) 
           <Button 
             type="submit" 
             className="flex-1"
-            disabled={!name.trim() || !quantity || !unit || isLoading}
+            disabled={!name.trim() || !category || !quantity || !unit || isLoading}
           >
             {isLoading ? (
               <>

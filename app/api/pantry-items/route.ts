@@ -36,11 +36,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { name, quantity, unit } = body
+    const { name, quantity, unit, category } = body
 
     const { data, error } = await supabase
       .from('pantry_items')
-      .insert({ user_id: user.id, name, quantity, unit, in_stock: true })
+      .insert({ user_id: user.id, name, quantity, unit, category: category || 'Uncategorized', in_stock: true })
       .select()
 
     if (error) {
