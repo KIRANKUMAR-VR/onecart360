@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -43,6 +43,9 @@ export function EditQuantityDialog({ item, isOpen, onClose, onSave, isLoading = 
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Edit Quantity</DialogTitle>
+          <DialogDescription>
+            Update the quantity for {item?.name}. Enter the new quantity value below.
+          </DialogDescription>
         </DialogHeader>
         {item && (
           <div className="space-y-4">
