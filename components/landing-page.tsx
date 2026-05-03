@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { ArrowRight, Package, TrendingDown, Users, AlertCircle, Shield, Home, Heart } from 'lucide-react'
 import Link from 'next/link'
-import Image from 'next/image'
 
 export function LandingPage() {
   return (
@@ -13,13 +12,7 @@ export function LandingPage() {
       <nav className="border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Image
-              src="/logo.png"
-              alt="OneCart360"
-              width={32}
-              height={32}
-              className="h-8 w-8"
-            />
+            <Package className="w-6 h-6 text-primary" />
             <span className="font-bold text-lg text-foreground">OneCart360</span>
           </div>
           <div className="hidden md:flex items-center gap-8">
