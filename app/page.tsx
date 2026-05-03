@@ -12,10 +12,13 @@ export default function HomePage() {
   useEffect(() => {
     const supabase = createClient()
     
-    supabase.auth.getUser().then(({ data: { user } }) => {
+    const checkUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
       setIsLoading(false)
-    })
+    }
+
+    checkUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user || null)
@@ -43,3 +46,4 @@ export default function HomePage() {
   // Otherwise show landing page
   return <LandingPage />
 }
+
