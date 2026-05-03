@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import Image from "next/image"
-import { Plus, ChevronDown, Package, PackageX } from "lucide-react"
+import { Plus, ChevronDown, Package } from "lucide-react"
 import { useItems } from "@/contexts/items-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { PantryList } from "@/components/pantry-list"
