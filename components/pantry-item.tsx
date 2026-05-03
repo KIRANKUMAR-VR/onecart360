@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Minus, Trash2, Pencil, Check, X } from "lucide-react"
+import { Pencil, Trash2, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
@@ -75,112 +75,119 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
     <Card
       className={cn(
         "p-4 transition-all duration-200",
-        isLowStock && "border-low-stock bg-low-stock-bg"
+        isLowStock && "border-low-stock bg-low-stock-bg",
+        isEditingQuantity && "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/30 dark:border-yellow-800"
       )}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <h3 className={cn(
-            "font-medium truncate",
-            isLowStock && "text-low-stock"
-          )}>
-            {item.name}
-          </h3>
-          <div className="flex items-center gap-2 mt-1">
-            {isEditingQuantity ? (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <h3 className={cn(
+              "font-medium truncate",
+              isLowStock && "text-low-stock"
+            )}>
+              {item.name}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">{item.category}</p>
+          </div>
+          
+          {showStockToggle && onToggleStock && (
+            <div className="flex items-center gap-2">
+              <Switch
+                id={`stock-toggle-${item.id}`}
+                checked={item.inStock}
+                disabled={isTogglingStock}
+                onCheckedChange={handleToggleStock}
+                aria-label={`Toggle stock for ${item.name}`}
+              />
+              <Label 
+                htmlFor={`stock-toggle-${item.id}`}
+                className={cn(
+                  "text-sm font-medium cursor-pointer whitespace-nowrap",
+                  item.inStock ? "text-primary" : "text-muted-foreground",
+                  isTogglingStock && "opacity-50"
+                )}
+              >
+                {isTogglingStock ? "Updating..." : item.inStock ? "In Stock" : "Out of Stock"}
+              </Label>
+            </div>
+          )}
+        </div>
+
+        {!readOnly && !showStockToggle && (
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <Label htmlFor={`qty-${item.id}`} className="text-xs font-medium text-muted-foreground block mb-1">
+                Quantity
+              </Label>
               <div className="flex items-center gap-2">
                 <Input
+                  id={`qty-${item.id}`}
                   type="number"
                   step="0.1"
                   min="0"
                   value={editQuantity}
                   onChange={(e) => setEditQuantity(e.target.value)}
-                  className="h-7 w-20 text-sm"
-                  disabled={isSaving}
-                  autoFocus
+                  disabled={!isEditingQuantity || isSaving}
+                  className={cn(
+                    "h-9 flex-1 text-sm",
+                    isEditingQuantity && "border-primary/50 focus:border-primary"
+                  )}
+                  placeholder="0"
                 />
-                <span className="text-sm text-muted-foreground">{item.unit}</span>
+                <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">{item.unit}</span>
               </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {item.quantity} {item.unit}
-              </p>
-            )}
-          </div>
-        </div>
-        
-        {showStockToggle && onToggleStock && (
-          <div className="flex items-center gap-2">
-            <Switch
-              id={`stock-toggle-${item.id}`}
-              checked={item.inStock}
-              disabled={isTogglingStock}
-              onCheckedChange={handleToggleStock}
-              aria-label={`Toggle stock for ${item.name}`}
-            />
-            <Label 
-              htmlFor={`stock-toggle-${item.id}`}
-              className={cn(
-                "text-sm font-medium cursor-pointer",
-                item.inStock ? "text-primary" : "text-muted-foreground",
-                isTogglingStock && "opacity-50"
-              )}
-            >
-              {isTogglingStock ? "Updating..." : item.inStock ? "In Stock" : "Out of Stock"}
-            </Label>
-          </div>
-        )}
-        
-        {!readOnly && !showStockToggle && (
-          isEditingQuantity ? (
-            <div className="flex items-center gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
-                onClick={handleSaveQuantity}
-                disabled={isSaving}
-                aria-label="Save quantity"
-              >
-                <Check className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-muted-foreground hover:text-muted-foreground hover:bg-muted"
-                onClick={handleCancelEdit}
-                disabled={isSaving}
-                aria-label="Cancel editing"
-              >
-                <X className="h-4 w-4" />
-              </Button>
             </div>
-          ) : (
+
             <div className="flex items-center gap-2">
-              {onEdit && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-3"
-                  onClick={() => setIsEditingQuantity(true)}
-                  aria-label={`Edit ${item.name} quantity`}
-                >
-                  <Pencil className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
+              {isEditingQuantity ? (
+                <>
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-9 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={handleSaveQuantity}
+                    disabled={isSaving}
+                    aria-label="Save quantity"
+                  >
+                    {isSaving ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3"
+                    onClick={handleCancelEdit}
+                    disabled={isSaving}
+                    aria-label="Cancel editing"
+                  >
+                    Cancel
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3"
+                    onClick={() => setIsEditingQuantity(true)}
+                    aria-label={`Edit ${item.name} quantity`}
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => onDelete?.(item.id)}
+                    aria-label={`Delete ${item.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </>
               )}
-              
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={() => onDelete?.(item.id)}
-                aria-label={`Delete ${item.name}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
             </div>
-          )
+          </div>
         )}
       </div>
     </Card>
