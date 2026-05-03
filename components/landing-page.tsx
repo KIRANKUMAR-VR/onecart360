@@ -141,7 +141,7 @@ export function LandingPage() {
 
           <div className="grid md:grid-cols-4 gap-8 relative">
             {/* Connection lines */}
-            <div className="hidden md:block absolute top-24 left-0 right-0 h-1 bg-gradient-to-r from-primary/20 via-primary/50 to-primary/20" />
+            <div className="hidden md:block absolute top-8 left-0 right-0 h-1 bg-gradient-to-r from-primary/20 via-primary/50 to-primary/20" />
             
             {[
               { step: 1, title: 'Add Items', description: 'Create a list of your household items' },
