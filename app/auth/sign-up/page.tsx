@@ -62,7 +62,7 @@ export default function Page() {
     <div className="flex min-h-svh w-full items-center justify-center p-6 md:p-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
-          <div className="flex flex-col items-center gap-2 mb-4">
+          <Link href="/" className="flex flex-col items-center gap-2 mb-4 cursor-pointer hover:opacity-80 transition-opacity">
             <Image
               src="/logo.png"
               alt="OneCart360"
@@ -72,7 +72,7 @@ export default function Page() {
             />
             <h1 className="text-2xl font-bold text-foreground">OneCart360</h1>
             <p className="text-xs text-muted-foreground">Track. Manage. Never Run Out.</p>
-          </div>
+          </Link>
           <Card>
             <CardHeader>
               <CardTitle className="text-2xl">Sign up</CardTitle>
