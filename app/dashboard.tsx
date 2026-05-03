@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
 
-export default function Home() {
+export default function Dashboard() {
   const { items, toggleStock, addItems, isLoading, error } = useItems()
   const isMobile = useIsMobile()
   const [stockInOpen, setStockInOpen] = useState(true)

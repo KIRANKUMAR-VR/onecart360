@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Dashboard from './dashboard'
-import LandingPage from './landing/page'
+import { LandingPage } from '@/components/landing-page'
 
 export default function HomePage() {
   const [user, setUser] = useState<any>(null)
