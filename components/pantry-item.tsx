@@ -141,4 +141,3 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
     </Card>
   )
 }
-}
