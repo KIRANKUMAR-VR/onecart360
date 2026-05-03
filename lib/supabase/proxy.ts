@@ -60,12 +60,14 @@ export async function updateSession(request: NextRequest) {
   // Only redirect (not API routes — they handle their own 401)
   const isApiRoute = pathname.startsWith('/api/')
   const isAuthRoute = pathname.startsWith('/auth/')
-  const protectedPaths = ['/', '/items']
+  const isPublicRoute = pathname === '/' || pathname.startsWith('/landing')
+  const protectedPaths = ['/items', '/dashboard']
   const isProtectedPath = protectedPaths.some(path =>
     pathname === path || pathname.startsWith(path + '/')
   )
 
-  if (!isApiRoute && !isAuthRoute && isProtectedPath && !user) {
+  // Redirect to login only for protected paths without auth
+  if (!isApiRoute && !isAuthRoute && !isPublicRoute && isProtectedPath && !user) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
