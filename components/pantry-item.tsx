@@ -30,7 +30,7 @@ interface PantryItemProps {
 
 export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onToggleStock, readOnly = false, showStockToggle = false }: PantryItemProps) {
   const [isTogglingStock, setIsTogglingStock] = useState(false)
-  const isLowStock = item.quantity <= 1 || !item.inStock
+  const isLowStock = !item.inStock
   
   const handleToggleStock = async (checked: boolean) => {
     try {
