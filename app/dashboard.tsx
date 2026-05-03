@@ -9,15 +9,36 @@ import { useIsMobile } from "@/hooks/use-mobile"
 import { PantryList } from "@/components/pantry-list"
 import { CameraScan } from "@/components/camera-scan"
 import { DashboardMenu } from "@/components/dashboard-menu"
+import { EditQuantityDialog } from "@/components/edit-quantity-dialog"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible"
 import { cn } from "@/lib/utils"
+import type { PantryItemData } from "@/components/pantry-item"
 
 export default function Dashboard() {
-  const { items, toggleStock, addItems, isLoading, error } = useItems()
+  const { items, toggleStock, addItems, updateItem, isLoading, error } = useItems()
   const isMobile = useIsMobile()
   const [stockInOpen, setStockInOpen] = useState(true)
   const [stockOutOpen, setStockOutOpen] = useState(true)
+  const [editingItem, setEditingItem] = useState<PantryItemData | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+
+  const handleEditClick = (itemId: string) => {
+    const item = items.find(i => i.id === itemId)
+    if (item) {
+      setEditingItem(item)
+    }
+  }
+
+  const handleSaveQuantity = async (newQuantity: number) => {
+    if (!editingItem) return
+    try {
+      setIsUpdating(true)
+      await updateItem(editingItem.id, editingItem.name, newQuantity, editingItem.unit, editingItem.category)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   const inStockItems = items.filter((item) => item.inStock)
   const outOfStockItems = items.filter((item) => !item.inStock)
@@ -105,6 +126,7 @@ export default function Dashboard() {
             <PantryList
               items={outOfStockItems}
               onToggleStock={toggleStock}
+              onEdit={handleEditClick}
               showStockToggle
             />
           </CollapsibleContent>
@@ -129,6 +151,7 @@ export default function Dashboard() {
             <PantryList
               items={inStockItems}
               onToggleStock={toggleStock}
+              onEdit={handleEditClick}
               showStockToggle
             />
           </CollapsibleContent>
@@ -136,6 +159,14 @@ export default function Dashboard() {
           </>
         )}
       </div>
+
+      <EditQuantityDialog
+        item={editingItem}
+        isOpen={editingItem !== null}
+        onClose={() => setEditingItem(null)}
+        onSave={handleSaveQuantity}
+        isLoading={isUpdating}
+      />
     </main>
   )
 }
