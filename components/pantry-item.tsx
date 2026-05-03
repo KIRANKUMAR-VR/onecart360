@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Minus, Trash2, Pencil } from "lucide-react"
+import { Plus, Minus, Trash2, Pencil, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 
 export interface PantryItemData {
@@ -23,13 +24,17 @@ interface PantryItemProps {
   onDecrease?: (id: string) => void
   onDelete?: (id: string) => void
   onEdit?: (id: string) => void
+  onUpdateQuantity?: (id: string, quantity: number) => Promise<void>
   onToggleStock?: (id: string, inStock: boolean) => Promise<void>
   readOnly?: boolean
   showStockToggle?: boolean
 }
 
-export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onToggleStock, readOnly = false, showStockToggle = false }: PantryItemProps) {
+export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onUpdateQuantity, onToggleStock, readOnly = false, showStockToggle = false }: PantryItemProps) {
   const [isTogglingStock, setIsTogglingStock] = useState(false)
+  const [isEditingQuantity, setIsEditingQuantity] = useState(false)
+  const [editQuantity, setEditQuantity] = useState(item.quantity.toString())
+  const [isSaving, setIsSaving] = useState(false)
   const isLowStock = !item.inStock
   
   const handleToggleStock = async (checked: boolean) => {
@@ -41,6 +46,29 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
     } finally {
       setIsTogglingStock(false)
     }
+  }
+
+  const handleSaveQuantity = async () => {
+    const newQuantity = parseFloat(editQuantity)
+    if (isNaN(newQuantity) || newQuantity < 0) {
+      alert('Please enter a valid quantity')
+      return
+    }
+    try {
+      setIsSaving(true)
+      await onUpdateQuantity?.(item.id, newQuantity)
+      setIsEditingQuantity(false)
+    } catch (err) {
+      console.error('[v0] Update quantity error:', err)
+      alert('Failed to update quantity')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleCancelEdit = () => {
+    setEditQuantity(item.quantity.toString())
+    setIsEditingQuantity(false)
   }
 
   return (
@@ -58,9 +86,27 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
           )}>
             {item.name}
           </h3>
-          <p className="text-sm text-muted-foreground">
-            {item.quantity} {item.unit}
-          </p>
+          <div className="flex items-center gap-2 mt-1">
+            {isEditingQuantity ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  value={editQuantity}
+                  onChange={(e) => setEditQuantity(e.target.value)}
+                  className="h-7 w-20 text-sm"
+                  disabled={isSaving}
+                  autoFocus
+                />
+                <span className="text-sm text-muted-foreground">{item.unit}</span>
+              </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                {item.quantity} {item.unit}
+              </p>
+            )}
+          </div>
         </div>
         
         {showStockToggle && onToggleStock && (
@@ -86,54 +132,55 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onT
         )}
         
         {!readOnly && !showStockToggle && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onDecrease?.(item.id)}
-              disabled={item.quantity <= 0}
-              aria-label={`Decrease ${item.name} quantity`}
-            >
-              <Minus className="h-4 w-4" />
-            </Button>
-            
-            <span className="w-8 text-center font-medium tabular-nums">
-              {item.quantity}
-            </span>
-            
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => onIncrease?.(item.id)}
-              aria-label={`Increase ${item.name} quantity`}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            
-            {onEdit && (
+          isEditingQuantity ? (
+            <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8"
-                onClick={() => onEdit(item.id)}
-                aria-label={`Edit ${item.name}`}
+                className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                onClick={handleSaveQuantity}
+                disabled={isSaving}
+                aria-label="Save quantity"
               >
-                <Pencil className="h-4 w-4" />
+                <Check className="h-4 w-4" />
               </Button>
-            )}
-            
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-              onClick={() => onDelete?.(item.id)}
-              aria-label={`Delete ${item.name}`}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-muted-foreground hover:bg-muted"
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+                aria-label="Cancel editing"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              {onEdit && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 px-3"
+                  onClick={() => setIsEditingQuantity(true)}
+                  aria-label={`Edit ${item.name} quantity`}
+                >
+                  <Pencil className="h-4 w-4 mr-1" />
+                  Edit
+                </Button>
+              )}
+              
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                onClick={() => onDelete?.(item.id)}
+                aria-label={`Delete ${item.name}`}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          )
         )}
       </div>
     </Card>

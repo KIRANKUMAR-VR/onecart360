@@ -127,6 +127,13 @@ export default function Dashboard() {
               items={outOfStockItems}
               onToggleStock={toggleStock}
               onEdit={handleEditClick}
+              onUpdateQuantity={(id, quantity) => updateItem(
+                id,
+                items.find(i => i.id === id)?.name || '',
+                quantity,
+                items.find(i => i.id === id)?.unit || '',
+                items.find(i => i.id === id)?.category || ''
+              )}
               showStockToggle
             />
           </CollapsibleContent>
@@ -152,6 +159,13 @@ export default function Dashboard() {
               items={inStockItems}
               onToggleStock={toggleStock}
               onEdit={handleEditClick}
+              onUpdateQuantity={(id, quantity) => updateItem(
+                id,
+                items.find(i => i.id === id)?.name || '',
+                quantity,
+                items.find(i => i.id === id)?.unit || '',
+                items.find(i => i.id === id)?.category || ''
+              )}
               showStockToggle
             />
           </CollapsibleContent>
