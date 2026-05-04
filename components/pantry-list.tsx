@@ -14,9 +14,10 @@ interface PantryListProps {
   onToggleStock?: (id: string, inStock: boolean) => Promise<void>
   readOnly?: boolean
   showStockToggle?: boolean
+  showEditButton?: boolean
 }
 
-export function PantryList({ items, onIncrease, onDecrease, onDelete, onEdit, onUpdateQuantity, onToggleStock, readOnly = false, showStockToggle = false }: PantryListProps) {
+export function PantryList({ items, onIncrease, onDecrease, onDelete, onEdit, onUpdateQuantity, onToggleStock, readOnly = false, showStockToggle = false, showEditButton = false }: PantryListProps) {
   if (items.length === 0) {
     return (
       <Empty>
@@ -47,6 +48,7 @@ export function PantryList({ items, onIncrease, onDecrease, onDelete, onEdit, on
           onToggleStock={onToggleStock}
           readOnly={readOnly}
           showStockToggle={showStockToggle}
+          showEditButton={showEditButton}
         />
       ))}
     </div>

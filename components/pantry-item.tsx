@@ -28,9 +28,10 @@ interface PantryItemProps {
   onToggleStock?: (id: string, inStock: boolean) => Promise<void>
   readOnly?: boolean
   showStockToggle?: boolean
+  showEditButton?: boolean
 }
 
-export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onUpdateQuantity, onToggleStock, readOnly = false, showStockToggle = false }: PantryItemProps) {
+export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onUpdateQuantity, onToggleStock, readOnly = false, showStockToggle = false, showEditButton = false }: PantryItemProps) {
   const [isTogglingStock, setIsTogglingStock] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -118,16 +119,18 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
               </div>
 
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 px-3"
-                  onClick={handleEditClick}
-                  aria-label={`Edit ${item.name} quantity`}
-                >
-                  <Pencil className="h-4 w-4 mr-1" />
-                  Edit
-                </Button>
+                {showEditButton && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 px-3"
+                    onClick={handleEditClick}
+                    aria-label={`Edit ${item.name} quantity`}
+                  >
+                    <Pencil className="h-4 w-4 mr-1" />
+                    Edit
+                  </Button>
+                )}
                 {!showStockToggle && (
                   <Button
                     variant="ghost"
@@ -145,13 +148,15 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
         </div>
       </Card>
 
-      <EditQuantityDialog
-        item={item}
-        isOpen={isEditDialogOpen}
-        onClose={() => setIsEditDialogOpen(false)}
-        onSave={handleSaveQuantity}
-        isLoading={isSaving}
-      />
+      {showEditButton && (
+        <EditQuantityDialog
+          item={item}
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          onSave={handleSaveQuantity}
+          isLoading={isSaving}
+        />
+      )}
     </>
   )
 }
