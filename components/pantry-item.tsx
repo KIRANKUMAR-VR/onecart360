@@ -1,12 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Pencil, Trash2, Check, X } from "lucide-react"
+import { Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
+import { EditQuantityDialog } from "@/components/edit-quantity-dialog"
 import { cn } from "@/lib/utils"
 
 export interface PantryItemData {
@@ -28,12 +28,12 @@ interface PantryItemProps {
   onToggleStock?: (id: string, inStock: boolean) => Promise<void>
   readOnly?: boolean
   showStockToggle?: boolean
+  showEditButton?: boolean
 }
 
-export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onUpdateQuantity, onToggleStock, readOnly = false, showStockToggle = false }: PantryItemProps) {
+export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onUpdateQuantity, onToggleStock, readOnly = false, showStockToggle = false, showEditButton = false }: PantryItemProps) {
   const [isTogglingStock, setIsTogglingStock] = useState(false)
-  const [isEditingQuantity, setIsEditingQuantity] = useState(false)
-  const [editQuantity, setEditQuantity] = useState(item.quantity.toString())
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const isLowStock = !item.inStock
   
@@ -48,16 +48,11 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
     }
   }
 
-  const handleSaveQuantity = async () => {
-    const newQuantity = parseFloat(editQuantity)
-    if (isNaN(newQuantity) || newQuantity < 0) {
-      alert('Please enter a valid quantity')
-      return
-    }
+  const handleSaveQuantity = async (newQuantity: number) => {
     try {
       setIsSaving(true)
       await onUpdateQuantity?.(item.id, newQuantity)
-      setIsEditingQuantity(false)
+      setIsEditDialogOpen(false)
     } catch (err) {
       console.error('[v0] Update quantity error:', err)
       alert('Failed to update quantity')
@@ -66,115 +61,77 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
     }
   }
 
-  const handleCancelEdit = () => {
-    setEditQuantity(item.quantity.toString())
-    setIsEditingQuantity(false)
+  const handleEditClick = () => {
+    setIsEditDialogOpen(true)
+    onEdit?.(item.id)
   }
 
   return (
-    <Card
-      className={cn(
-        "p-4 transition-all duration-200",
-        isLowStock && "border-low-stock bg-low-stock-bg",
-        isEditingQuantity && "bg-yellow-50 border-yellow-300 dark:bg-yellow-950/30 dark:border-yellow-800"
-      )}
-    >
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex-1 min-w-0">
-            <h3 className={cn(
-              "font-medium truncate",
-              isLowStock && "text-low-stock"
-            )}>
-              {item.name}
-            </h3>
-            <p className="text-xs text-muted-foreground mt-1">{item.category}</p>
-          </div>
-          
-          {showStockToggle && onToggleStock && (
-            <div className="flex items-center gap-2">
-              <Switch
-                id={`stock-toggle-${item.id}`}
-                checked={item.inStock}
-                disabled={isTogglingStock}
-                onCheckedChange={handleToggleStock}
-                aria-label={`Toggle stock for ${item.name}`}
-              />
-              <Label 
-                htmlFor={`stock-toggle-${item.id}`}
-                className={cn(
-                  "text-sm font-medium cursor-pointer whitespace-nowrap",
-                  item.inStock ? "text-primary" : "text-muted-foreground",
-                  isTogglingStock && "opacity-50"
-                )}
-              >
-                {isTogglingStock ? "Updating..." : item.inStock ? "In Stock" : "Out of Stock"}
-              </Label>
+    <>
+      <Card
+        className={cn(
+          "p-4 transition-all duration-200",
+          isLowStock && "border-low-stock bg-low-stock-bg"
+        )}
+      >
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <h3 className={cn(
+                "font-medium truncate",
+                isLowStock && "text-low-stock"
+              )}>
+                {item.name}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">{item.category}</p>
             </div>
-          )}
-        </div>
-
-        {!readOnly && !showStockToggle && (
-          <div className="flex items-end gap-3">
-            <div className="flex-1">
-              <Label htmlFor={`qty-${item.id}`} className="text-xs font-medium text-muted-foreground block mb-1">
-                Quantity
-              </Label>
+            
+            {showStockToggle && onToggleStock && (
               <div className="flex items-center gap-2">
-                <Input
-                  id={`qty-${item.id}`}
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  value={editQuantity}
-                  onChange={(e) => setEditQuantity(e.target.value)}
-                  disabled={!isEditingQuantity || isSaving}
-                  className={cn(
-                    "h-9 flex-1 text-sm",
-                    isEditingQuantity && "border-primary/50 focus:border-primary"
-                  )}
-                  placeholder="0"
+                <Switch
+                  id={`stock-toggle-${item.id}`}
+                  checked={item.inStock}
+                  disabled={isTogglingStock}
+                  onCheckedChange={handleToggleStock}
+                  aria-label={`Toggle stock for ${item.name}`}
                 />
-                <span className="text-sm text-muted-foreground font-medium whitespace-nowrap">{item.unit}</span>
+                <Label 
+                  htmlFor={`stock-toggle-${item.id}`}
+                  className={cn(
+                    "text-sm font-medium cursor-pointer whitespace-nowrap",
+                    item.inStock ? "text-primary" : "text-muted-foreground",
+                    isTogglingStock && "opacity-50"
+                  )}
+                >
+                  {isTogglingStock ? "Updating..." : item.inStock ? "In Stock" : "Out of Stock"}
+                </Label>
               </div>
-            </div>
+            )}
+          </div>
 
-            <div className="flex items-center gap-2">
-              {isEditingQuantity ? (
-                <>
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-9 px-3 bg-primary text-primary-foreground hover:bg-primary/90"
-                    onClick={handleSaveQuantity}
-                    disabled={isSaving}
-                    aria-label="Save quantity"
-                  >
-                    {isSaving ? "Saving..." : "Save"}
-                  </Button>
+          {!readOnly && (
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  {item.quantity} {item.unit}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Quantity</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {showEditButton && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="h-9 px-3"
-                    onClick={handleCancelEdit}
-                    disabled={isSaving}
-                    aria-label="Cancel editing"
-                  >
-                    Cancel
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-9 px-3"
-                    onClick={() => setIsEditingQuantity(true)}
+                    onClick={handleEditClick}
                     aria-label={`Edit ${item.name} quantity`}
                   >
                     <Pencil className="h-4 w-4 mr-1" />
                     Edit
                   </Button>
+                )}
+                {!showStockToggle && (
                   <Button
                     variant="ghost"
                     size="icon"
@@ -184,12 +141,22 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </>
-              )}
+                )}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
-    </Card>
+          )}
+        </div>
+      </Card>
+
+      {showEditButton && (
+        <EditQuantityDialog
+          item={item}
+          isOpen={isEditDialogOpen}
+          onClose={() => setIsEditDialogOpen(false)}
+          onSave={handleSaveQuantity}
+          isLoading={isSaving}
+        />
+      )}
+    </>
   )
 }

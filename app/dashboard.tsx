@@ -35,6 +35,7 @@ export default function Dashboard() {
     try {
       setIsUpdating(true)
       await updateItem(editingItem.id, editingItem.name, newQuantity, editingItem.unit, editingItem.category)
+      setEditingItem(null)
     } finally {
       setIsUpdating(false)
     }

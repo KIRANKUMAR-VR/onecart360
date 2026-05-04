@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, Package, Camera } from "lucide-react"
+import { ArrowLeft, Package, Camera, Pencil } from "lucide-react"
 import { useItems } from "@/contexts/items-context"
 import { useIsMobile } from "@/hooks/use-mobile"
 import { AddItemForm } from "@/components/add-item-form"
@@ -15,11 +15,14 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Empty, EmptyMedia, EmptyHeader, EmptyTitle, EmptyDescription } from "@/components/ui/empty"
 import type { PantryItemData } from "@/components/pantry-item"
+import { EditQuantityDialog } from "@/components/edit-quantity-dialog"
 
 export default function ItemsPage() {
   const { items, addItem, addItems, updateItem, deleteItem, isLoading, error } = useItems()
   const isMobile = useIsMobile()
   const [editingItem, setEditingItem] = useState<PantryItemData | null>(null)
+  const [editModalItem, setEditModalItem] = useState<PantryItemData | null>(null)
+  const [isUpdatingQty, setIsUpdatingQty] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
 
   const handleAddOrUpdate = async (name: string, quantity: number, unit: string, category: string) => {
@@ -38,8 +41,22 @@ export default function ItemsPage() {
   }
 
   const handleEdit = (item: PantryItemData) => {
-    setEditingItem(item)
+    setEditModalItem(item)
     setApiError(null)
+  }
+
+  const handleSaveQty = async (newQuantity: number) => {
+    if (!editModalItem) return
+    try {
+      setIsUpdatingQty(true)
+      await updateItem(editModalItem.id, editModalItem.name, newQuantity, editModalItem.unit, editModalItem.category)
+      setEditModalItem(null)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to update item'
+      setApiError(message)
+    } finally {
+      setIsUpdatingQty(false)
+    }
   }
 
   const handleCancelEdit = () => {
@@ -198,6 +215,7 @@ export default function ItemsPage() {
                           size="sm"
                           onClick={() => handleEdit(item)}
                         >
+                          <Pencil className="h-3.5 w-3.5 mr-1" />
                           Edit
                         </Button>
                         <Button
@@ -217,6 +235,14 @@ export default function ItemsPage() {
           )}
         </section>
       </div>
+
+      <EditQuantityDialog
+        item={editModalItem}
+        isOpen={editModalItem !== null}
+        onClose={() => setEditModalItem(null)}
+        onSave={handleSaveQty}
+        isLoading={isUpdatingQty}
+      />
     </main>
   )
 }
