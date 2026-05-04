@@ -108,7 +108,7 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
             )}
           </div>
 
-          {!readOnly && !showStockToggle && (
+          {!readOnly && (
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
                 <p className="text-sm font-medium text-foreground">
@@ -128,15 +128,17 @@ export function PantryItem({ item, onIncrease, onDecrease, onDelete, onEdit, onU
                   <Pencil className="h-4 w-4 mr-1" />
                   Edit
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => onDelete?.(item.id)}
-                  aria-label={`Delete ${item.name}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {!showStockToggle && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => onDelete?.(item.id)}
+                    aria-label={`Delete ${item.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           )}
