@@ -188,14 +188,25 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen pb-8 bg-background">
+    <main className="min-h-screen pb-24 bg-background">
+      {/* Sticky Header */}
+      <header className="sticky top-0 bg-background/95 backdrop-blur-sm border-b border-border z-50">
+        <div className="max-w-lg mx-auto px-4 py-4">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <div className="flex-1 min-w-0">
+              <h1 className="text-lg font-bold text-foreground truncate">{user?.name || 'Profile'}</h1>
+            </div>
+          </div>
+        </div>
+      </header>
+
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="ghost" size="icon" onClick={() => router.push('/')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-3xl font-bold text-foreground">Profile</h1>
+          <h2 className="text-3xl font-bold text-foreground">Profile Settings</h2>
         </div>
 
         {/* Error/Success Messages */}
