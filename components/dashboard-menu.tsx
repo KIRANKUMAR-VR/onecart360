@@ -1,6 +1,6 @@
 'use client'
 
-import { Menu, LogOut, Info, Mail, X } from 'lucide-react'
+import { Menu, LogOut, Info, Mail, User } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -43,6 +43,15 @@ export function DashboardMenu() {
         </SheetHeader>
         
         <div className="flex flex-col gap-3">
+          <Link
+            href="/profile"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 px-4 py-3 rounded-lg hover:bg-accent transition-colors text-foreground"
+          >
+            <User className="h-5 w-5 text-primary" />
+            <span className="font-medium">Profile</span>
+          </Link>
+          
           <Link
             href="/#about"
             onClick={() => setOpen(false)}
