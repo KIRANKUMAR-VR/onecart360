@@ -9,8 +9,8 @@ const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: 'Pantry Manager - My Kitchen Stock',
-  description: 'A simple app to manage your household kitchen stock',
+  title: 'OneCart360 - Smart Home Inventory Management',
+  description: 'Manage, track, and organize your household essentials in one place. Never run out of supplies again.',
   generator: 'v0.app',
   icons: {
     icon: [
