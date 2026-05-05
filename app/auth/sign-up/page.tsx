@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useState, useRef } from 'react'
 import Image from 'next/image'
 import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react'
@@ -51,6 +52,7 @@ export default function Page() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const router = useRouter()
 
   // Refs for auto-focus next field
   const emailRef = useRef<HTMLInputElement>(null)
@@ -97,24 +99,21 @@ export default function Page() {
             phone: phone,
             household_name: householdName,
           },
-          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL,
+          emailRedirectTo:
+            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
+            `${window.location.origin}/auth/callback`,
         },
       })
       if (error) {
-        const msg = error.message.toLowerCase()
-        if (msg.includes('already') || msg.includes('registered')) {
-          setFieldErrors({ email: 'An account with this email already exists.' })
-        } else if (msg.includes('email') && (msg.includes('send') || msg.includes('confirmation'))) {
-          setError('Unable to send confirmation email. Please check your email address and try again, or contact support.')
-        } else if (msg.includes('rate limit') || msg.includes('too many')) {
-          setError('Too many sign-up attempts. Please wait a few minutes and try again.')
+        if (error.message.toLowerCase().includes('already')) {
+          setFieldErrors({ email: 'An account with this email already exists' })
         } else {
-          setError(error.message || 'Account creation failed. Please try again.')
+          throw error
         }
         return
       }
       setSuccess(true)
-      setTimeout(() => { window.location.href = '/auth/sign-up-success' }, 1200)
+      setTimeout(() => router.push('/auth/sign-up-success'), 1500)
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'An error occurred'
