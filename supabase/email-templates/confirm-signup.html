@@ -57,15 +57,34 @@
       letter-spacing: 0.3px;
     }
 
-    .email-header .brand-icon {
+    .logo-wrapper {
       display: inline-block;
-      width: 48px;
-      height: 48px;
-      background-color: rgba(255, 255, 255, 0.2);
-      border-radius: 12px;
-      margin-bottom: 14px;
-      line-height: 48px;
-      font-size: 24px;
+      background-color: #ffffff;
+      border-radius: 14px;
+      padding: 10px 20px;
+      margin-bottom: 16px;
+      line-height: 0;
+    }
+
+    .logo-wrapper img {
+      height: 40px;
+      width: auto;
+      display: block;
+    }
+
+    .logo-fallback {
+      display: inline-block;
+      background-color: #ffffff;
+      border-radius: 14px;
+      padding: 10px 20px;
+      margin-bottom: 16px;
+    }
+
+    .logo-fallback-text {
+      font-size: 20px;
+      font-weight: 800;
+      color: #27ae60;
+      letter-spacing: -0.5px;
     }
 
     /* Body */
@@ -186,7 +205,22 @@
 
       <!-- Header -->
       <div class="email-header">
-        <div class="brand-icon">&#128722;</div>
+        <!--[if !vml]><!-->
+        <div class="logo-wrapper">
+          <img
+            src="https://onecart360.vercel.app/onecart360-logo.jpg"
+            alt="OneCart360"
+            width="160"
+            height="40"
+            style="height:40px;width:auto;display:block;"
+          />
+        </div>
+        <!--<![endif]-->
+        <!--[if vml]>
+        <div class="logo-fallback">
+          <span class="logo-fallback-text">OneCart360</span>
+        </div>
+        <![endif]-->
         <p class="brand-name">OneCart360</p>
         <p class="brand-tagline">All Your Essentials. One Place.</p>
       </div>
