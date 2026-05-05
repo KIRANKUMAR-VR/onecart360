@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { useState, useRef } from 'react'
 import Image from 'next/image'
 import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react'
@@ -52,7 +51,6 @@ export default function Page() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
-  const router = useRouter()
 
   // Refs for auto-focus next field
   const emailRef = useRef<HTMLInputElement>(null)
@@ -113,7 +111,7 @@ export default function Page() {
         return
       }
       setSuccess(true)
-      setTimeout(() => router.push('/auth/sign-up-success'), 1500)
+      setTimeout(() => { window.location.href = '/auth/sign-up-success' }, 1200)
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'An error occurred'
