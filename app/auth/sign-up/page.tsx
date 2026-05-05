@@ -97,16 +97,19 @@ export default function Page() {
             phone: phone,
             household_name: householdName,
           },
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
-            `${window.location.origin}/auth/callback`,
+          emailRedirectTo: process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL,
         },
       })
       if (error) {
-        if (error.message.toLowerCase().includes('already')) {
-          setFieldErrors({ email: 'An account with this email already exists' })
+        const msg = error.message.toLowerCase()
+        if (msg.includes('already') || msg.includes('registered')) {
+          setFieldErrors({ email: 'An account with this email already exists.' })
+        } else if (msg.includes('email') && (msg.includes('send') || msg.includes('confirmation'))) {
+          setError('Unable to send confirmation email. Please check your email address and try again, or contact support.')
+        } else if (msg.includes('rate limit') || msg.includes('too many')) {
+          setError('Too many sign-up attempts. Please wait a few minutes and try again.')
         } else {
-          throw error
+          setError(error.message || 'Account creation failed. Please try again.')
         }
         return
       }
