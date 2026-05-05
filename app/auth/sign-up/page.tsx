@@ -100,7 +100,7 @@ export default function Page() {
             household_name: householdName,
           },
           emailRedirectTo:
-            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
+            process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL ??
             `${window.location.origin}/auth/callback`,
         },
       })
@@ -108,7 +108,8 @@ export default function Page() {
         if (error.message.toLowerCase().includes('already')) {
           setFieldErrors({ email: 'An account with this email already exists' })
         } else {
-          throw error
+          console.error('[v0] Sign-up error:', error)
+          setError(`Unable to create account: ${error.message}`)
         }
         return
       }
@@ -116,7 +117,8 @@ export default function Page() {
       setTimeout(() => router.push('/auth/sign-up-success'), 1500)
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : 'An error occurred'
+        error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.'
+      console.error('[v0] Unexpected error:', error)
       setError(errorMessage)
     } finally {
       setIsLoading(false)
