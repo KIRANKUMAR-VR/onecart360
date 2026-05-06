@@ -90,7 +90,9 @@ export default function Page() {
     setIsLoading(true)
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const redirectTo = `${window.location.origin}/auth/callback`
+
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -99,26 +101,40 @@ export default function Page() {
             phone: phone,
             household_name: householdName,
           },
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_SUPABASE_REDIRECT_URL ??
-            `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectTo,
         },
       })
+
       if (error) {
-        if (error.message.toLowerCase().includes('already')) {
-          setFieldErrors({ email: 'An account with this email already exists' })
+        const msg = error.message.toLowerCase()
+        if (msg.includes('already') || msg.includes('already registered')) {
+          setFieldErrors({ email: 'An account with this email already exists. Try logging in instead.' })
+        } else if (msg.includes('rate limit') || msg.includes('too many')) {
+          setError('Too many sign-up attempts. Please wait a few minutes and try again.')
+        } else if (msg.includes('invalid email')) {
+          setFieldErrors({ email: 'Please enter a valid email address.' })
+        } else if (msg.includes('password')) {
+          setFieldErrors({ password: 'Password does not meet the requirements.' })
+        } else if (msg.includes('email') && msg.includes('send')) {
+          // Email sending failed — account may still be created, guide user to login
+          setError('Account created but confirmation email could not be sent. Please try logging in or contact support.')
         } else {
-          console.error('[v0] Sign-up error:', error)
-          setError(`Unable to create account: ${error.message}`)
+          setError(`Sign-up failed: ${error.message}`)
         }
         return
       }
+
+      // Supabase returns identities: [] when email already exists (no error thrown)
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setFieldErrors({ email: 'An account with this email already exists. Try logging in instead.' })
+        return
+      }
+
       setSuccess(true)
       setTimeout(() => router.push('/auth/sign-up-success'), 1500)
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.'
-      console.error('[v0] Unexpected error:', error)
       setError(errorMessage)
     } finally {
       setIsLoading(false)
