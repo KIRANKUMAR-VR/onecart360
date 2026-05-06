@@ -52,6 +52,8 @@ export default function Page() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [emailSendFailure, setEmailSendFailure] = useState(false)
+  const [createdEmail, setCreatedEmail] = useState('')
   const router = useRouter()
 
   // Refs for auto-focus next field
@@ -116,12 +118,23 @@ export default function Page() {
         } else if (msg.includes('password')) {
           setFieldErrors({ password: 'Password does not meet the requirements.' })
         } else if (msg.includes('email') && msg.includes('send')) {
-          // Email sending failed — account may still be created, guide user to login
-          setError('Account created but confirmation email could not be sent. Please try logging in or contact support.')
+          // Email sending failed but account may still be created
+          // Check if user was actually created despite email failure
+          const { data: userData } = await supabase.auth.getUser()
+          if (userData.user) {
+            // Account was created, just email failed
+            setEmailSendFailure(true)
+            setCreatedEmail(email)
+            setSuccess(true)
+            return
+          } else {
+            setError('Account creation failed: Could not send confirmation email. Please try again.')
+            return
+          }
         } else {
           setError(`Sign-up failed: ${error.message}`)
+          return
         }
-        return
       }
 
       // Supabase returns identities: [] when email already exists (no error thrown)
@@ -158,12 +171,39 @@ export default function Page() {
 
           {/* Success State */}
           {success ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center">
-              <CheckCircle2 className="h-12 w-12 text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Account Created!</h2>
-              <p className="text-sm text-muted-foreground">
-                Check your email to verify your account before logging in.
-              </p>
+            <div className={cn(
+              "flex flex-col items-center gap-3 rounded-2xl border p-8 text-center",
+              emailSendFailure
+                ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-800"
+                : "border-primary/20 bg-primary/5"
+            )}>
+              <CheckCircle2 className={cn("h-12 w-12", emailSendFailure ? "text-yellow-600" : "text-primary")} />
+              <h2 className="text-lg font-semibold text-foreground">
+                {emailSendFailure ? 'Account Created!' : 'Account Created!'}
+              </h2>
+              {emailSendFailure ? (
+                <div className="space-y-3 w-full">
+                  <p className="text-sm text-foreground">
+                    Your account has been created, but we couldn&apos;t send the confirmation email.
+                  </p>
+                  <div className="space-y-2 text-sm text-muted-foreground text-left bg-muted/50 rounded-lg p-3 border border-border">
+                    <p>You can still log in with your credentials:</p>
+                    <p className="text-foreground font-medium">{createdEmail}</p>
+                    <p className="text-xs">Email verification can be done later from your profile.</p>
+                  </div>
+                  <Button 
+                    asChild 
+                    variant="default" 
+                    className="w-full mt-3"
+                  >
+                    <Link href="/auth/login">Go to Login</Link>
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Check your email to verify your account before logging in.
+                </p>
+              )}
             </div>
           ) : (
             <div className="rounded-2xl border border-border bg-card shadow-sm p-6">
