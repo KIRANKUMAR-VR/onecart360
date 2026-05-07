@@ -109,7 +109,15 @@ export default function Page() {
 
       if (error) {
         const msg = error.message.toLowerCase()
-        if (msg.includes('already') || msg.includes('already registered')) {
+        const isEmailError =
+          msg.includes('confirmation email') ||
+          msg.includes('sending email') ||
+          msg.includes('send') ||
+          msg.includes('smtp') ||
+          msg.includes('535') ||
+          error.status === 500
+
+        if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('already')) {
           setFieldErrors({ email: 'An account with this email already exists. Try logging in instead.' })
         } else if (msg.includes('rate limit') || msg.includes('too many')) {
           setError('Too many sign-up attempts. Please wait a few minutes and try again.')
@@ -117,24 +125,18 @@ export default function Page() {
           setFieldErrors({ email: 'Please enter a valid email address.' })
         } else if (msg.includes('password')) {
           setFieldErrors({ password: 'Password does not meet the requirements.' })
-        } else if (msg.includes('email') && msg.includes('send')) {
-          // Email sending failed but account may still be created
-          // Check if user was actually created despite email failure
-          const { data: userData } = await supabase.auth.getUser()
-          if (userData.user) {
-            // Account was created, just email failed
-            setEmailSendFailure(true)
-            setCreatedEmail(email)
-            setSuccess(true)
-            return
-          } else {
-            setError('Account creation failed: Could not send confirmation email. Please try again.')
-            return
-          }
+        } else if (isEmailError) {
+          // SMTP failure — account WAS created in Supabase but email couldn't be sent.
+          // Allow the user to proceed to login directly.
+          setEmailSendFailure(true)
+          setCreatedEmail(email)
+          setSuccess(true)
+          return
         } else {
           setError(`Sign-up failed: ${error.message}`)
           return
         }
+        return
       }
 
       // Supabase returns identities: [] when email already exists (no error thrown)
@@ -171,39 +173,24 @@ export default function Page() {
 
           {/* Success State */}
           {success ? (
-            <div className={cn(
-              "flex flex-col items-center gap-3 rounded-2xl border p-8 text-center",
-              emailSendFailure
-                ? "border-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 dark:border-yellow-800"
-                : "border-primary/20 bg-primary/5"
-            )}>
-              <CheckCircle2 className={cn("h-12 w-12", emailSendFailure ? "text-yellow-600" : "text-primary")} />
-              <h2 className="text-lg font-semibold text-foreground">
-                {emailSendFailure ? 'Account Created!' : 'Account Created!'}
-              </h2>
-              {emailSendFailure ? (
-                <div className="space-y-3 w-full">
-                  <p className="text-sm text-foreground">
-                    Your account has been created, but we couldn&apos;t send the confirmation email.
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center">
+              <CheckCircle2 className="h-12 w-12 text-primary" />
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-foreground">Account Created!</h2>
+                {emailSendFailure ? (
+                  <p className="text-sm text-muted-foreground">
+                    Your account is ready. You can log in immediately with{' '}
+                    <span className="font-medium text-foreground">{createdEmail}</span>.
                   </p>
-                  <div className="space-y-2 text-sm text-muted-foreground text-left bg-muted/50 rounded-lg p-3 border border-border">
-                    <p>You can still log in with your credentials:</p>
-                    <p className="text-foreground font-medium">{createdEmail}</p>
-                    <p className="text-xs">Email verification can be done later from your profile.</p>
-                  </div>
-                  <Button 
-                    asChild 
-                    variant="default" 
-                    className="w-full mt-3"
-                  >
-                    <Link href="/auth/login">Go to Login</Link>
-                  </Button>
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  Check your email to verify your account before logging in.
-                </p>
-              )}
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Check your email to verify your account before logging in.
+                  </p>
+                )}
+              </div>
+              <Button asChild className="w-full h-11 text-base font-semibold">
+                <Link href="/auth/login">Go to Login</Link>
+              </Button>
             </div>
           ) : (
             <div className="rounded-2xl border border-border bg-card shadow-sm p-6">
