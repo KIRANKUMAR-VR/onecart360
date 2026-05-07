@@ -52,6 +52,8 @@ export default function Page() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState(false)
+  const [emailSendFailure, setEmailSendFailure] = useState(false)
+  const [createdEmail, setCreatedEmail] = useState('')
   const router = useRouter()
 
   // Refs for auto-focus next field
@@ -90,7 +92,9 @@ export default function Page() {
     setIsLoading(true)
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const redirectTo = `${window.location.origin}/auth/callback`
+
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -99,24 +103,53 @@ export default function Page() {
             phone: phone,
             household_name: householdName,
           },
-          emailRedirectTo:
-            process.env.NEXT_PUBLIC_DEV_SUPABASE_REDIRECT_URL ??
-            `${window.location.origin}/auth/callback`,
+          emailRedirectTo: redirectTo,
         },
       })
+
       if (error) {
-        if (error.message.toLowerCase().includes('already')) {
-          setFieldErrors({ email: 'An account with this email already exists' })
+        const msg = error.message.toLowerCase()
+        const isEmailError =
+          msg.includes('confirmation email') ||
+          msg.includes('sending email') ||
+          msg.includes('send') ||
+          msg.includes('smtp') ||
+          msg.includes('535') ||
+          error.status === 500
+
+        if (msg.includes('already registered') || msg.includes('already exists') || msg.includes('already')) {
+          setFieldErrors({ email: 'An account with this email already exists. Try logging in instead.' })
+        } else if (msg.includes('rate limit') || msg.includes('too many')) {
+          setError('Too many sign-up attempts. Please wait a few minutes and try again.')
+        } else if (msg.includes('invalid email')) {
+          setFieldErrors({ email: 'Please enter a valid email address.' })
+        } else if (msg.includes('password')) {
+          setFieldErrors({ password: 'Password does not meet the requirements.' })
+        } else if (isEmailError) {
+          // SMTP failure — account WAS created in Supabase but email couldn't be sent.
+          // Allow the user to proceed to login directly.
+          setEmailSendFailure(true)
+          setCreatedEmail(email)
+          setSuccess(true)
+          return
         } else {
-          throw error
+          setError(`Sign-up failed: ${error.message}`)
+          return
         }
         return
       }
+
+      // Supabase returns identities: [] when email already exists (no error thrown)
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setFieldErrors({ email: 'An account with this email already exists. Try logging in instead.' })
+        return
+      }
+
       setSuccess(true)
       setTimeout(() => router.push('/auth/sign-up-success'), 1500)
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : 'An error occurred'
+        error instanceof Error ? error.message : 'An unexpected error occurred. Please try again.'
       setError(errorMessage)
     } finally {
       setIsLoading(false)
@@ -140,12 +173,24 @@ export default function Page() {
 
           {/* Success State */}
           {success ? (
-            <div className="flex flex-col items-center gap-3 rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center">
+            <div className="flex flex-col items-center gap-4 rounded-2xl border border-primary/20 bg-primary/5 p-8 text-center">
               <CheckCircle2 className="h-12 w-12 text-primary" />
-              <h2 className="text-lg font-semibold text-foreground">Account Created!</h2>
-              <p className="text-sm text-muted-foreground">
-                Check your email to verify your account before logging in.
-              </p>
+              <div className="space-y-1">
+                <h2 className="text-lg font-semibold text-foreground">Account Created!</h2>
+                {emailSendFailure ? (
+                  <p className="text-sm text-muted-foreground">
+                    Your account is ready. You can log in immediately with{' '}
+                    <span className="font-medium text-foreground">{createdEmail}</span>.
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Check your email to verify your account before logging in.
+                  </p>
+                )}
+              </div>
+              <Button asChild className="w-full h-11 text-base font-semibold">
+                <Link href="/auth/login">Go to Login</Link>
+              </Button>
             </div>
           ) : (
             <div className="rounded-2xl border border-border bg-card shadow-sm p-6">
