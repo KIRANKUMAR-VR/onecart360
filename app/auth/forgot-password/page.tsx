@@ -38,10 +38,13 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // Use NEXT_PUBLIC_SITE_URL in production to avoid localhost URLs in emails
-      const siteUrl =
+      // Build the correct redirect URL for the reset email.
+      // Priority: NEXT_PUBLIC_SITE_URL (explicitly set) > window.location.origin (current host).
+      // This prevents links pointing to localhost when the email is opened on another device.
+      const siteUrl = (
         process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
-        (typeof window !== 'undefined' ? window.location.origin : '')
+        (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
+      )
 
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${siteUrl}/auth/callback?type=recovery&next=/auth/reset-password`,
