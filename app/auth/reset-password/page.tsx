@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Eye, EyeOff, XCircle, CheckCircle2, Check, X,
@@ -89,8 +89,33 @@ function Spinner({ className }: { className?: string }) {
 // ── Screen types ──────────────────────────────────────────────────────────────
 type Screen = 'verifying' | 'form' | 'success' | 'error'
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-export default function ResetPasswordPage() {
+// ── Dev debug panel ───────────────────────────────────────────────────────────
+interface DebugInfo {
+  url: string
+  hash: string
+  hasAccessToken: boolean
+  hasCode: boolean
+  type: string | null
+  sessionStatus: string
+}
+
+function DevDebugPanel({ info }: { info: DebugInfo }) {
+  if (process.env.NODE_ENV !== 'development') return null
+  return (
+    <div className="rounded-xl border border-yellow-300 bg-yellow-50 dark:bg-yellow-950/30 p-4 text-xs font-mono space-y-1">
+      <p className="font-bold text-yellow-700 mb-2">Dev Debug Panel</p>
+      <p><span className="text-muted-foreground">URL:</span> {info.url}</p>
+      <p><span className="text-muted-foreground">Hash params:</span> {info.hash || '(none)'}</p>
+      <p><span className="text-muted-foreground">access_token:</span> {info.hasAccessToken ? 'present' : 'missing'}</p>
+      <p><span className="text-muted-foreground">code:</span> {info.hasCode ? 'present' : 'missing'}</p>
+      <p><span className="text-muted-foreground">type:</span> {info.type ?? '(none)'}</p>
+      <p><span className="text-muted-foreground">session:</span> {info.sessionStatus}</p>
+    </div>
+  )
+}
+
+// ── Inner page (uses useSearchParams — must be inside Suspense) ───────────────
+function ResetPasswordInner() {
   const [screen,          setScreen]          = useState<Screen>('verifying')
   const [errorMessage,    setErrorMessage]    = useState<string>('')
   const [password,        setPassword]        = useState('')
@@ -101,6 +126,7 @@ export default function ResetPasswordPage() {
   const [globalError,     setGlobalError]     = useState<string | null>(null)
   const [isSubmitting,    setIsSubmitting]    = useState(false)
   const [submitCount,     setSubmitCount]     = useState(0)
+  const [debugInfo,       setDebugInfo]       = useState<DebugInfo | null>(null)
   const hasSubmitted      = useRef(false)
 
   const router       = useRouter()
@@ -108,43 +134,69 @@ export default function ResetPasswordPage() {
 
   // ── Token / session verification ──────────────────────────────────────────
   useEffect(() => {
+    const supabase = createClient()
+
+    // Collect debug info (dev only)
+    if (process.env.NODE_ENV === 'development') {
+      const hash = window.location.hash.slice(1)
+      const hashParams = new URLSearchParams(hash)
+      setDebugInfo({
+        url: window.location.href,
+        hash: hash ? hash.substring(0, 60) + '…' : '',
+        hasAccessToken: hashParams.has('access_token'),
+        hasCode: searchParams.has('code'),
+        type: searchParams.get('type') ?? hashParams.get('type'),
+        sessionStatus: 'checking…',
+      })
+    }
+
+    // 1. Check for ?error= from callback redirect
     const urlError = searchParams.get('error')
     if (urlError === 'invalid_token') {
       setErrorMessage('This password reset link is invalid or has expired.')
       setScreen('error')
+      if (process.env.NODE_ENV === 'development') {
+        setDebugInfo((d) => d ? { ...d, sessionStatus: 'invalid_token from URL' } : d)
+      }
       return
     }
 
-    const supabase = createClient()
-
-    // Listen for the PASSWORD_RECOVERY event emitted when Supabase
-    // exchanges the hash token automatically on the client.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setScreen('form')
-      } else if (event === 'SIGNED_IN') {
-        // Already have a valid session (e.g. came via code exchange in callback)
+    // 2. Attempt to set session from hash fragment (#access_token + #refresh_token)
+    //    Supabase JS client reads window.location.hash automatically when you call
+    //    getSession() or onAuthStateChange — no manual parsing needed.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (process.env.NODE_ENV === 'development') {
+        setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
+      }
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
         setScreen('form')
       }
     })
 
-    // Fallback: check existing session (code already exchanged via /auth/callback)
-    supabase.auth.getSession().then(({ data }) => {
+    // 3. Fallback: check if session already exists (PKCE code already exchanged)
+    supabase.auth.getSession().then(({ data, error: sessionError }) => {
+      if (process.env.NODE_ENV === 'development') {
+        setDebugInfo((d) => d
+          ? { ...d, sessionStatus: sessionError ? `error: ${sessionError.message}` : data.session ? 'active session' : 'no session' }
+          : d
+        )
+      }
       if (data.session) {
         setScreen('form')
-      } else {
-        // Give the hash-based flow 4 s to fire onAuthStateChange
-        const timer = setTimeout(() => {
-          setScreen((s) => {
-            if (s === 'verifying') {
-              setErrorMessage('This password reset link is invalid or has expired.')
-              return 'error'
-            }
-            return s
-          })
-        }, 4000)
-        return () => clearTimeout(timer)
+        return
       }
+
+      // 4. Final fallback timer — if no event fires in 5 s, show error
+      const timer = setTimeout(() => {
+        setScreen((s) => {
+          if (s === 'verifying') {
+            setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
+            return 'error'
+          }
+          return s
+        })
+      }, 5000)
+      return () => clearTimeout(timer)
     })
 
     return () => subscription.unsubscribe()
@@ -454,8 +506,29 @@ export default function ResetPasswordPage() {
             </div>
           )}
 
+          {/* Dev debug panel — only visible in development */}
+          {debugInfo && <DevDebugPanel info={debugInfo} />}
+
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Default export wrapped in Suspense ────────────────────────────────────────
+// Next.js App Router requires useSearchParams() to be inside a Suspense boundary
+// during static prerendering, otherwise the build fails with exit code 1.
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-svh w-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ResetPasswordInner />
+    </Suspense>
   )
 }
