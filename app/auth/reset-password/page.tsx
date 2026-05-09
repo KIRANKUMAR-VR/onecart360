@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Eye, EyeOff, XCircle, CheckCircle2, Check, X,
@@ -114,8 +114,8 @@ function DevDebugPanel({ info }: { info: DebugInfo }) {
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
-export default function ResetPasswordPage() {
+// ── Inner page (uses useSearchParams — must be inside Suspense) ───────────────
+function ResetPasswordInner() {
   const [screen,          setScreen]          = useState<Screen>('verifying')
   const [errorMessage,    setErrorMessage]    = useState<string>('')
   const [password,        setPassword]        = useState('')
@@ -512,5 +512,23 @@ export default function ResetPasswordPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Default export wrapped in Suspense ────────────────────────────────────────
+// Next.js App Router requires useSearchParams() to be inside a Suspense boundary
+// during static prerendering, otherwise the build fails with exit code 1.
+export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-svh w-full items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    }>
+      <ResetPasswordInner />
+    </Suspense>
   )
 }
