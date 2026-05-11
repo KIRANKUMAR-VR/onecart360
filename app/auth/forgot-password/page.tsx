@@ -39,15 +39,11 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // Use NEXT_PUBLIC_APP_URL in production (must match whitelisted URL in Supabase).
-      // Fall back to window.location.origin in dev (localhost:3000 is whitelisted by default).
-      const appUrl =
-        process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
-        (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${appUrl}/auth/callback?type=recovery&next=/auth/reset-password`,
-      })
+      // Do NOT pass a custom redirectTo — Supabase will use its own configured Site URL
+      // (set in Auth > URL Configuration in the Supabase dashboard).
+      // Passing window.location.origin caused "localhost:3000" to appear in reset emails,
+      // leading to "One-time token not found" errors when the link was opened on any device.
+      const { error } = await supabase.auth.resetPasswordForEmail(email)
       if (error) throw error
       setIsSent(true)
     } catch (err: unknown) {
