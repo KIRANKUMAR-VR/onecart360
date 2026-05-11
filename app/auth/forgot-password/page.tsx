@@ -9,7 +9,7 @@ import Image from 'next/image'
 import { useState } from 'react'
 import { ArrowLeft, XCircle, CheckCircle, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { getSiteUrl } from '@/lib/supabase/site-url'
+
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -39,8 +39,14 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
+      // Use NEXT_PUBLIC_APP_URL in production (must match whitelisted URL in Supabase).
+      // Fall back to window.location.origin in dev (localhost:3000 is whitelisted by default).
+      const appUrl =
+        process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+        (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
+
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${getSiteUrl()}/auth/callback?type=recovery&next=/auth/reset-password`,
+        redirectTo: `${appUrl}/auth/callback?type=recovery&next=/auth/reset-password`,
       })
       if (error) throw error
       setIsSent(true)
