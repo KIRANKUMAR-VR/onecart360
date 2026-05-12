@@ -14,27 +14,33 @@ export default function HomePage() {
   useEffect(() => {
     const supabase = createClient()
 
-    // Supabase fires PASSWORD_RECOVERY before any other event when the email
-    // link contains #access_token=...&type=recovery. Catch it here first so
-    // we can redirect while the hash is still in the URL (the Supabase client
-    // reads it automatically from window.location.hash).
+    // Check for recovery hash BEFORE setting up any auth listeners.
+    // If the URL contains #type=recovery the Supabase client will fire
+    // PASSWORD_RECOVERY — we must navigate away immediately so the hash
+    // is preserved for the reset-password page to process.
+    if (typeof window !== 'undefined') {
+      const hashParams = new URLSearchParams(window.location.hash.slice(1))
+      if (hashParams.get('type') === 'recovery') {
+        window.location.replace(`/auth/reset-password${window.location.hash}`)
+        return
+      }
+    }
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
-        // Use window.location.assign so the full hash is preserved for the
-        // reset-password page's own onAuthStateChange to pick up.
-        window.location.assign(`/auth/reset-password${window.location.hash}`)
+        window.location.replace(`/auth/reset-password${window.location.hash}`)
         return
       }
       setUser(session?.user || null)
       setIsLoading(false)
     })
 
+    // Only run checkUser after confirming this is NOT a recovery flow
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
       setIsLoading(false)
     }
-
     checkUser()
 
     return () => subscription.unsubscribe()

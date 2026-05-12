@@ -161,22 +161,23 @@ export default function ResetPasswordPage() {
       return
     }
 
-    // 2. Listen for PASSWORD_RECOVERY — fired when the Supabase client processes
-    //    the #access_token&type=recovery hash that was preserved in the redirect.
-    //    We intentionally do NOT accept plain SIGNED_IN here — that would show
-    //    the form to any logged-in user who navigates to this URL directly.
+    // IMPORTANT: Register onAuthStateChange BEFORE calling getSession().
+    // Supabase processes the hash token synchronously when the client is
+    // initialised — if getSession() runs first the PASSWORD_RECOVERY event
+    // may have already fired and been missed.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (process.env.NODE_ENV === 'development') {
         setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
       }
-      if (event === 'PASSWORD_RECOVERY') {
+      // Accept PASSWORD_RECOVERY (hash flow) or SIGNED_IN arriving here via
+      // the PKCE /auth/callback?type=recovery redirect.
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
         setScreen('form')
       }
     })
 
-    // 3. Fallback: if the PKCE code was already exchanged server-side via
-    //    /auth/callback?type=recovery, a valid session already exists.
-    //    In that case no PASSWORD_RECOVERY event fires — check session directly.
+    // 3. Fallback: PKCE code was already exchanged server-side in /auth/callback.
+    //    No event fires in that case — getSession() returns an active session.
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (process.env.NODE_ENV === 'development') {
         setDebugInfo((d) => d
@@ -184,15 +185,12 @@ export default function ResetPasswordPage() {
           : d
         )
       }
-      // Only trust a session that arrived here via the PKCE callback redirect
-      // (i.e. the URL was /auth/reset-password with no hash — callback already ran)
-      const hasHash = typeof window !== 'undefined' && window.location.hash.includes('access_token')
-      if (data.session && !hasHash) {
+      if (data.session) {
         setScreen('form')
         return
       }
 
-      // 4. Final fallback timer — if no event fires in 5 s, show expired error
+      // 4. Final timer — give the hash-fragment flow up to 8 s to fire the event
       const timer = setTimeout(() => {
         setScreen((s) => {
           if (s === 'verifying') {
@@ -201,7 +199,7 @@ export default function ResetPasswordPage() {
           }
           return s
         })
-      }, 5000)
+      }, 8000)
       return () => clearTimeout(timer)
     })
 

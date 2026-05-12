@@ -30,12 +30,14 @@ export async function GET(request: NextRequest) {
   }
 
   // Hash-fragment flow: Supabase puts #access_token=...&type=recovery in the URL.
-  // The server never sees hash fragments — redirect to reset-password so
-  // the client-side onAuthStateChange can pick up the PASSWORD_RECOVERY event.
+  // The server never sees hash fragments — redirect cleanly to reset-password
+  // so the client-side onAuthStateChange picks up the PASSWORD_RECOVERY event.
   if (type === 'recovery') {
     return NextResponse.redirect(`${origin}/auth/reset-password`)
   }
 
-  // No code and no recovery type
-  return NextResponse.redirect(`${origin}/auth/reset-password?error=invalid_token`)
+  // No code and no recovery type — could still be a hash-fragment flow where
+  // the hash was not included in the server request. Redirect to reset-password
+  // without an error param so the client gets a chance to process the hash.
+  return NextResponse.redirect(`${origin}/auth/reset-password`)
 }
