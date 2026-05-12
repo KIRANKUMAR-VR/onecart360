@@ -161,19 +161,22 @@ export default function ResetPasswordPage() {
       return
     }
 
-    // 2. Attempt to set session from hash fragment (#access_token + #refresh_token)
-    //    Supabase JS client reads window.location.hash automatically when you call
-    //    getSession() or onAuthStateChange — no manual parsing needed.
+    // 2. Listen for PASSWORD_RECOVERY — fired when the Supabase client processes
+    //    the #access_token&type=recovery hash that was preserved in the redirect.
+    //    We intentionally do NOT accept plain SIGNED_IN here — that would show
+    //    the form to any logged-in user who navigates to this URL directly.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (process.env.NODE_ENV === 'development') {
         setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
       }
-      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+      if (event === 'PASSWORD_RECOVERY') {
         setScreen('form')
       }
     })
 
-    // 3. Fallback: check if session already exists (PKCE code already exchanged)
+    // 3. Fallback: if the PKCE code was already exchanged server-side via
+    //    /auth/callback?type=recovery, a valid session already exists.
+    //    In that case no PASSWORD_RECOVERY event fires — check session directly.
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (process.env.NODE_ENV === 'development') {
         setDebugInfo((d) => d
@@ -181,12 +184,15 @@ export default function ResetPasswordPage() {
           : d
         )
       }
-      if (data.session) {
+      // Only trust a session that arrived here via the PKCE callback redirect
+      // (i.e. the URL was /auth/reset-password with no hash — callback already ran)
+      const hasHash = typeof window !== 'undefined' && window.location.hash.includes('access_token')
+      if (data.session && !hasHash) {
         setScreen('form')
         return
       }
 
-      // 4. Final fallback timer — if no event fires in 5 s, show error
+      // 4. Final fallback timer — if no event fires in 5 s, show expired error
       const timer = setTimeout(() => {
         setScreen((s) => {
           if (s === 'verifying') {

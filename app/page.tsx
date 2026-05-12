@@ -12,18 +12,22 @@ export default function HomePage() {
   const router = useRouter()
 
   useEffect(() => {
-    // Detect hash-fragment recovery tokens that Supabase sends when its own
-    // Site URL is used as the redirect target (e.g. https://yourapp.com/#type=recovery).
-    // The server never sees hash fragments, so we must intercept them here on the client.
-    if (typeof window !== 'undefined') {
-      const hash = new URLSearchParams(window.location.hash.slice(1))
-      if (hash.get('type') === 'recovery') {
-        router.replace('/auth/reset-password')
+    const supabase = createClient()
+
+    // Supabase fires PASSWORD_RECOVERY before any other event when the email
+    // link contains #access_token=...&type=recovery. Catch it here first so
+    // we can redirect while the hash is still in the URL (the Supabase client
+    // reads it automatically from window.location.hash).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        // Use window.location.assign so the full hash is preserved for the
+        // reset-password page's own onAuthStateChange to pick up.
+        window.location.assign(`/auth/reset-password${window.location.hash}`)
         return
       }
-    }
-
-    const supabase = createClient()
+      setUser(session?.user || null)
+      setIsLoading(false)
+    })
 
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -32,14 +36,6 @@ export default function HomePage() {
     }
 
     checkUser()
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        router.replace('/auth/reset-password')
-        return
-      }
-      setUser(session?.user || null)
-    })
 
     return () => subscription.unsubscribe()
   }, [router])
