@@ -73,6 +73,20 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // If a recovery session lands on / (Supabase default redirect when no redirectTo
+  // is set), send the user straight to the reset-password page.
+  // Note: the server cannot read hash fragments, so this handles the ?code= PKCE flow.
+  // Hash-fragment recovery (#type=recovery) is handled client-side in page.tsx.
+  if (pathname === '/' && user) {
+    const typeParam = request.nextUrl.searchParams.get('type')
+    if (typeParam === 'recovery') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/reset-password'
+      url.searchParams.delete('type')
+      return NextResponse.redirect(url)
+    }
+  }
+
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
   // If you're creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:

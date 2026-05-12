@@ -39,11 +39,12 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // Do NOT pass a custom redirectTo — Supabase will use its own configured Site URL
-      // (set in Auth > URL Configuration in the Supabase dashboard).
-      // Passing window.location.origin caused "localhost:3000" to appear in reset emails,
-      // leading to "One-time token not found" errors when the link was opened on any device.
-      const { error } = await supabase.auth.resetPasswordForEmail(email)
+      // Always use window.location.origin so the reset link targets the same
+      // host the user is currently on — whether localhost, preview, or production.
+      // The /auth/callback route then handles the PKCE code exchange and routes
+      // the user to /auth/reset-password.
+      const redirectTo = `${window.location.origin}/auth/callback?type=recovery`
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)
     } catch (err: unknown) {

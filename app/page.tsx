@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Dashboard from './dashboard'
 import { LandingPage } from '@/components/landing-page'
@@ -8,10 +9,22 @@ import { LandingPage } from '@/components/landing-page'
 export default function HomePage() {
   const [user, setUser] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const router = useRouter()
 
   useEffect(() => {
+    // Detect hash-fragment recovery tokens that Supabase sends when its own
+    // Site URL is used as the redirect target (e.g. https://yourapp.com/#type=recovery).
+    // The server never sees hash fragments, so we must intercept them here on the client.
+    if (typeof window !== 'undefined') {
+      const hash = new URLSearchParams(window.location.hash.slice(1))
+      if (hash.get('type') === 'recovery') {
+        router.replace('/auth/reset-password')
+        return
+      }
+    }
+
     const supabase = createClient()
-    
+
     const checkUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       setUser(user)
@@ -21,11 +34,15 @@ export default function HomePage() {
     checkUser()
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        router.replace('/auth/reset-password')
+        return
+      }
       setUser(session?.user || null)
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [router])
 
   if (isLoading) {
     return (
