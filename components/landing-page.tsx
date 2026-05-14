@@ -342,7 +342,7 @@ export function LandingPage() {
             <Link href="/auth/sign-up">
               <Button
                 size="lg"
-                className="bg-background text-foreground hover:bg-background/90 h-12 px-8 text-base w-full sm:w-auto"
+                className="bg-low-stock text-foreground hover:bg-low-stock/90 h-12 px-8 text-base w-full sm:w-auto"
               >
                 Create Free Account
                 <ArrowRight className="h-4 w-4 ml-2" />
