@@ -416,7 +416,7 @@ export default function Page() {
                         Terms &amp; Conditions
                       </Link>{' '}
                       and{' '}
-                      <Link href="/privacy" target="_blank" className="text-primary underline underline-offset-2 hover:opacity-80">
+                      <Link href="/privacy-policy" target="_blank" className="text-primary underline underline-offset-2 hover:opacity-80">
                         Privacy Policy
                       </Link>
                     </label>

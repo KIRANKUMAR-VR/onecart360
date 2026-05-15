@@ -60,7 +60,11 @@ export async function updateSession(request: NextRequest) {
   // Only redirect (not API routes — they handle their own 401)
   const isApiRoute = pathname.startsWith('/api/')
   const isAuthRoute = pathname.startsWith('/auth/')
-  const isPublicRoute = pathname === '/' || pathname.startsWith('/landing')
+  const isPublicRoute =
+    pathname === '/' ||
+    pathname.startsWith('/landing') ||
+    pathname === '/privacy-policy' ||
+    pathname === '/terms'
   const protectedPaths = ['/items', '/dashboard']
   const isProtectedPath = protectedPaths.some(path =>
     pathname === path || pathname.startsWith(path + '/')

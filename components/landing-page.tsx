@@ -386,7 +386,7 @@ export function LandingPage() {
               <h4 className="text-sm font-semibold text-foreground mb-3">Company</h4>
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li><a href="#about" className="hover:text-foreground transition-colors">About</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a></li>
+                <li><Link href="/privacy-policy" className="hover:text-foreground transition-colors">Privacy Policy</Link></li>
               </ul>
             </div>
             <div>
