@@ -304,8 +304,8 @@ export default function PrivacyPolicyPage() {
             <Link href="/" className="hover:text-foreground transition-colors">
               Home
             </Link>
-            <Link href="/auth/sign-up" className="hover:text-foreground transition-colors">
-              Sign Up
+            <Link href="/terms-and-conditions" className="hover:text-foreground transition-colors">
+              Terms &amp; Conditions
             </Link>
             <a
               href="mailto:support@onecart360.com"

@@ -412,7 +412,7 @@ export default function Page() {
                     />
                     <label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
                       I agree to the{' '}
-                      <Link href="/terms" target="_blank" className="text-primary underline underline-offset-2 hover:opacity-80">
+                      <Link href="/terms-and-conditions" target="_blank" className="text-primary underline underline-offset-2 hover:opacity-80">
                         Terms &amp; Conditions
                       </Link>{' '}
                       and{' '}
