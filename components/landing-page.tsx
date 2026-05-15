@@ -351,7 +351,7 @@ export function LandingPage() {
             <Link href="/auth/login">
               <Button
                 size="lg"
-                className="bg-low-stock text-foreground hover:bg-low-stock/90 h-12 px-8 text-base w-full sm:w-auto"
+                className="bg-low-stock-bg text-foreground hover:bg-low-stock-bg/80 h-12 px-8 text-base w-full sm:w-auto"
               >
                 Sign In
               </Button>
