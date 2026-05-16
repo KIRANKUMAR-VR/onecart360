@@ -10,6 +10,7 @@ import { useState, useRef } from 'react'
 import Image from 'next/image'
 import { Eye, EyeOff, CheckCircle2, XCircle, Circle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { LegalModal, type LegalModalType } from '@/components/legal-modal'
 
 function getPasswordStrength(password: string): {
   score: number
@@ -48,6 +49,7 @@ export default function Page() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [agreedToTerms, setAgreedToTerms] = useState(false)
+  const [legalModal, setLegalModal] = useState<LegalModalType>(null)
   const [error, setError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -412,13 +414,21 @@ export default function Page() {
                     />
                     <label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
                       I agree to the{' '}
-                      <Link href="/terms-and-conditions" className="text-primary underline underline-offset-2 hover:opacity-80">
+                      <button
+                        type="button"
+                        onClick={() => setLegalModal('terms')}
+                        className="text-primary underline underline-offset-2 hover:opacity-80 font-medium"
+                      >
                         Terms &amp; Conditions
-                      </Link>{' '}
+                      </button>{' '}
                       and{' '}
-                      <Link href="/privacy-policy" className="text-primary underline underline-offset-2 hover:opacity-80">
+                      <button
+                        type="button"
+                        onClick={() => setLegalModal('privacy')}
+                        className="text-primary underline underline-offset-2 hover:opacity-80 font-medium"
+                      >
                         Privacy Policy
-                      </Link>
+                      </button>
                     </label>
                   </div>
                   {fieldErrors.terms && (
@@ -467,6 +477,9 @@ export default function Page() {
 
         </div>
       </div>
+
+      {/* Legal modals — rendered outside the form so form state is preserved */}
+      <LegalModal type={legalModal} onClose={() => setLegalModal(null)} />
     </div>
   )
 }
