@@ -60,7 +60,11 @@ export async function updateSession(request: NextRequest) {
   // Only redirect (not API routes — they handle their own 401)
   const isApiRoute = pathname.startsWith('/api/')
   const isAuthRoute = pathname.startsWith('/auth/')
-  const isPublicRoute = pathname === '/' || pathname.startsWith('/landing')
+  const isPublicRoute =
+    pathname === '/' ||
+    pathname.startsWith('/landing') ||
+    pathname === '/privacy-policy' ||
+    pathname === '/terms-and-conditions'
   const protectedPaths = ['/items', '/dashboard']
   const isProtectedPath = protectedPaths.some(path =>
     pathname === path || pathname.startsWith(path + '/')
@@ -71,6 +75,20 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
+  }
+
+  // If a recovery session lands on / (Supabase default redirect when no redirectTo
+  // is set), send the user straight to the reset-password page.
+  // Note: the server cannot read hash fragments, so this handles the ?code= PKCE flow.
+  // Hash-fragment recovery (#type=recovery) is handled client-side in page.tsx.
+  if (pathname === '/' && user) {
+    const typeParam = request.nextUrl.searchParams.get('type')
+    if (typeParam === 'recovery') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/reset-password'
+      url.searchParams.delete('type')
+      return NextResponse.redirect(url)
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.

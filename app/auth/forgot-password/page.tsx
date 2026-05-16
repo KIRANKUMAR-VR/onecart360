@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { ArrowLeft, XCircle, CheckCircle, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
+
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
   const [fieldError, setFieldError] = useState('')
@@ -38,17 +39,12 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // Build the correct redirect URL for the reset email.
-      // Priority: NEXT_PUBLIC_SITE_URL (explicitly set) > window.location.origin (current host).
-      // This prevents links pointing to localhost when the email is opened on another device.
-      const siteUrl = (
-        process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
-        (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000')
-      )
-
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${siteUrl}/auth/callback?type=recovery&next=/auth/reset-password`,
-      })
+      // Always use window.location.origin so the reset link targets the same
+      // host the user is currently on — whether localhost, preview, or production.
+      // The /auth/callback route then handles the PKCE code exchange and routes
+      // the user to /auth/reset-password.
+      const redirectTo = `${window.location.origin}/auth/callback?type=recovery`
+      const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)
     } catch (err: unknown) {

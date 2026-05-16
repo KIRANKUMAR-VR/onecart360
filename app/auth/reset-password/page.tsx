@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Eye, EyeOff, XCircle, CheckCircle2, Check, X,
@@ -114,8 +114,8 @@ function DevDebugPanel({ info }: { info: DebugInfo }) {
   )
 }
 
-// ── Inner page (uses useSearchParams — must be inside Suspense) ───────────────
-function ResetPasswordInner() {
+// ── Main page ─────────────────────────────────────────────────────────────────
+export default function ResetPasswordPage() {
   const [screen,          setScreen]          = useState<Screen>('verifying')
   const [errorMessage,    setErrorMessage]    = useState<string>('')
   const [password,        setPassword]        = useState('')
@@ -161,19 +161,23 @@ function ResetPasswordInner() {
       return
     }
 
-    // 2. Attempt to set session from hash fragment (#access_token + #refresh_token)
-    //    Supabase JS client reads window.location.hash automatically when you call
-    //    getSession() or onAuthStateChange — no manual parsing needed.
+    // IMPORTANT: Register onAuthStateChange BEFORE calling getSession().
+    // Supabase processes the hash token synchronously when the client is
+    // initialised — if getSession() runs first the PASSWORD_RECOVERY event
+    // may have already fired and been missed.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (process.env.NODE_ENV === 'development') {
         setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
       }
-      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+      // Accept PASSWORD_RECOVERY (hash flow) or SIGNED_IN arriving here via
+      // the PKCE /auth/callback?type=recovery redirect.
+      if (event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') {
         setScreen('form')
       }
     })
 
-    // 3. Fallback: check if session already exists (PKCE code already exchanged)
+    // 3. Fallback: PKCE code was already exchanged server-side in /auth/callback.
+    //    No event fires in that case — getSession() returns an active session.
     supabase.auth.getSession().then(({ data, error: sessionError }) => {
       if (process.env.NODE_ENV === 'development') {
         setDebugInfo((d) => d
@@ -186,7 +190,7 @@ function ResetPasswordInner() {
         return
       }
 
-      // 4. Final fallback timer — if no event fires in 5 s, show error
+      // 4. Final timer — give the hash-fragment flow up to 8 s to fire the event
       const timer = setTimeout(() => {
         setScreen((s) => {
           if (s === 'verifying') {
@@ -195,7 +199,7 @@ function ResetPasswordInner() {
           }
           return s
         })
-      }, 5000)
+      }, 8000)
       return () => clearTimeout(timer)
     })
 
@@ -512,23 +516,5 @@ function ResetPasswordInner() {
         </div>
       </div>
     </div>
-  )
-}
-
-// ── Default export wrapped in Suspense ────────────────────────────────────────
-// Next.js App Router requires useSearchParams() to be inside a Suspense boundary
-// during static prerendering, otherwise the build fails with exit code 1.
-export default function ResetPasswordPage() {
-  return (
-    <Suspense fallback={
-      <div className="flex min-h-svh w-full items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    }>
-      <ResetPasswordInner />
-    </Suspense>
   )
 }
