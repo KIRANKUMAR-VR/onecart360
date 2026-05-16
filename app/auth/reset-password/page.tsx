@@ -6,13 +6,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Eye, EyeOff, XCircle, CheckCircle2, Check, X,
   ShieldCheck, Lock, AlertTriangle, Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+// Force dynamic rendering — this page depends on runtime tokens/session
+// and must never be statically prerendered during build.
+export const dynamic = 'force-dynamic'
 
 // ── Password rules ────────────────────────────────────────────────────────────
 const PASSWORD_RULES = [
@@ -114,8 +118,29 @@ function DevDebugPanel({ info }: { info: DebugInfo }) {
   )
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+// ── Loading fallback ──────────────────────────────────────────────────────────
+function ResetPasswordFallback() {
+  return (
+    <div className="flex min-h-svh w-full items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm flex flex-col items-center gap-4 text-center">
+        <Loader2 className="h-10 w-10 text-primary animate-spin" />
+        <p className="text-sm text-muted-foreground">Loading&hellip;</p>
+      </div>
+    </div>
+  )
+}
+
+// ── Page shell — wraps inner component with Suspense so useSearchParams is safe
 export default function ResetPasswordPage() {
+  return (
+    <Suspense fallback={<ResetPasswordFallback />}>
+      <ResetPasswordInner />
+    </Suspense>
+  )
+}
+
+// ── Main page ─────────────────────────────────────────────────────────────────
+function ResetPasswordInner() {
   const [screen,          setScreen]          = useState<Screen>('verifying')
   const [errorMessage,    setErrorMessage]    = useState<string>('')
   const [password,        setPassword]        = useState('')
