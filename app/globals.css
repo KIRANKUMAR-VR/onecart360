@@ -39,6 +39,13 @@
   --sidebar-ring: oklch(0.708 0 0);
   --low-stock: oklch(0.65 0.15 70);
   --low-stock-bg: oklch(0.95 0.08 85);
+
+  /* Honey / honeycomb design system */
+  --honey: oklch(0.78 0.14 75);
+  --honey-deep: oklch(0.62 0.16 65);
+  --honey-light: oklch(0.95 0.07 85);
+  --honey-glow: oklch(0.88 0.11 80);
+  --cream: oklch(0.97 0.02 88);
 }
 
 .dark {
@@ -119,6 +126,11 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --color-low-stock: var(--low-stock);
   --color-low-stock-bg: var(--low-stock-bg);
+  --color-honey: var(--honey);
+  --color-honey-deep: var(--honey-deep);
+  --color-honey-light: var(--honey-light);
+  --color-honey-glow: var(--honey-glow);
+  --color-cream: var(--cream);
 }
 
 @layer base {
