@@ -123,7 +123,7 @@ const STATS = [
   { value: '4.9',   label: 'App Rating',         color: '#F59E0B' },
 ]
 
-// ── Glass card ────────────────────────────────────────────────────────────────
+// ���─ Glass card ────────────────────────────────────────────────────────────────
 function GlassCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
     <div
@@ -250,7 +250,7 @@ export function LandingPage() {
               </div>
 
               <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.07] text-balance text-foreground">
-                One Cart.{' '}
+                OneCart360.{' '}
                 <span className="text-primary">Smart Home.</span>{' '}
                 <span style={{ color: '#D97706' }}>Zero Waste.</span>
               </h1>
