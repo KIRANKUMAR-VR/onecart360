@@ -39,11 +39,14 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // Always use window.location.origin so the reset link targets the same
-      // host the user is currently on — whether localhost, preview, or production.
-      // The /auth/callback route then handles the PKCE code exchange and routes
-      // the user to /auth/reset-password.
-      const redirectTo = `${window.location.origin}/auth/callback?type=recovery`
+      // Build the redirectTo URL.
+      // Use NEXT_PUBLIC_APP_URL when set (production), otherwise fall back to
+      // window.location.origin (works for localhost and preview deployments).
+      // This URL must be whitelisted in Supabase Auth > URL Configuration > Redirect URLs.
+      const appOrigin =
+        process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+        window.location.origin
+      const redirectTo = `${appOrigin}/auth/callback?type=recovery`
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)
