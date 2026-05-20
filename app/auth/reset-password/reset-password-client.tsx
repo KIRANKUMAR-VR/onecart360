@@ -148,22 +148,20 @@ function ResetPasswordInner() {
   useEffect(() => {
     const supabase = createClient()
 
-    // Determine if this page load is a genuine recovery flow:
-    // - PKCE flow:        URL has ?code=... (exchanged by /auth/callback → redirect here)
-    // - Hash flow:        URL hash has #access_token=...&type=recovery
-    // - Direct redirect:  URL has no code/hash but session cookie is a recovery session
+    const code     = searchParams.get('code')
+    const type     = searchParams.get('type')
+    const urlError = searchParams.get('error')
+
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
     const hasHashToken = hashParams.has('access_token') && hashParams.get('type') === 'recovery'
-    const hasCode      = searchParams.has('code')
-    const urlError     = searchParams.get('error')
 
     if (process.env.NODE_ENV === 'development') {
       setDebugInfo({
         url: window.location.href,
         hash: window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
         hasAccessToken: hashParams.has('access_token'),
-        hasCode,
-        type: searchParams.get('type') ?? hashParams.get('type'),
+        hasCode: !!code,
+        type: type ?? hashParams.get('type'),
         sessionStatus: 'checking…',
       })
     }
@@ -174,37 +172,41 @@ function ResetPasswordInner() {
       return
     }
 
-    // Register onAuthStateChange BEFORE getSession so no events are missed.
-    // Only PASSWORD_RECOVERY unambiguously means this is a reset flow.
-    // SIGNED_IN alone is NOT sufficient — it also fires for normal logins.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (process.env.NODE_ENV === 'development') {
-        setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
-      }
-      if (event === 'PASSWORD_RECOVERY') {
-        setScreen('form')
-      }
-    })
+    // ── Path 1: PKCE recovery — code forwarded here by /auth/callback ─────
+    // The callback route does NOT exchange the code server-side for recovery
+    // flows because the proxy's getUser() would consume the session before
+    // this page renders. Instead we exchange it here client-side.
+    if (code && type === 'recovery') {
+      supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d ? { ...d, sessionStatus: exchangeError ? `exchange error: ${exchangeError.message}` : 'code exchanged OK' } : d)
+        }
+        if (exchangeError) {
+          setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
+          setScreen('error')
+        } else {
+          // Clean up the code from the URL so it cannot be replayed
+          window.history.replaceState({}, '', '/auth/reset-password')
+          setScreen('form')
+        }
+      })
+      return
+    }
 
-    // Fallback: PKCE flow — /auth/callback already exchanged the code and
-    // redirected here. No PASSWORD_RECOVERY fires in this path; check session.
-    supabase.auth.getSession().then(({ data, error: sessionError }) => {
-      if (process.env.NODE_ENV === 'development') {
-        setDebugInfo((d) => d
-          ? { ...d, sessionStatus: sessionError ? `error: ${sessionError.message}` : data.session ? 'active session' : 'no session' }
-          : d
-        )
-      }
+    // ── Path 2: Hash-fragment recovery — listen for PASSWORD_RECOVERY event ─
+    // Supabase JS automatically processes #access_token=...&type=recovery from
+    // window.location.hash and fires the PASSWORD_RECOVERY event.
+    if (hasHashToken) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
+        }
+        if (event === 'PASSWORD_RECOVERY') {
+          window.history.replaceState({}, '', '/auth/reset-password')
+          setScreen('form')
+        }
+      })
 
-      // Only trust an existing session when we arrived here via a deliberate
-      // recovery redirect (no hash token present means /auth/callback ran).
-      if (data.session && !hasHashToken) {
-        setScreen('form')
-        return
-      }
-
-      // Hash-fragment flow: Supabase JS processes the hash asynchronously.
-      // Give the PASSWORD_RECOVERY event up to 10 seconds to fire.
       const timer = setTimeout(() => {
         setScreen((s) => {
           if (s === 'verifying') {
@@ -214,10 +216,16 @@ function ResetPasswordInner() {
           return s
         })
       }, 10000)
-      return () => clearTimeout(timer)
-    })
 
-    return () => subscription.unsubscribe()
+      return () => {
+        subscription.unsubscribe()
+        clearTimeout(timer)
+      }
+    }
+
+    // ── Path 3: No code, no hash — invalid or direct navigation ──────────
+    setErrorMessage('No valid reset token found. Please request a new password reset link.')
+    setScreen('error')
   }, [searchParams])
 
   // ── Validation ────────────────────────────────────────────────────────────
