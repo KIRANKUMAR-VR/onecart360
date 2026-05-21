@@ -39,14 +39,15 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // Build the redirectTo URL.
-      // Use NEXT_PUBLIC_APP_URL when set (production), otherwise fall back to
-      // window.location.origin (works for localhost and preview deployments).
-      // This URL must be whitelisted in Supabase Auth > URL Configuration > Redirect URLs.
+      // redirectTo must be an EXACT match (or wildcard) in the Supabase
+      // Auth > URL Configuration > Redirect URLs allowlist.
+      // Do NOT append query params — Supabase treats them as part of the URL
+      // and will reject a non-matching redirectTo, falling back to Site URL.
+      // Recovery is detected in /auth/callback via the code exchange result.
       const appOrigin =
         process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
         window.location.origin
-      const redirectTo = `${appOrigin}/auth/callback?type=recovery`
+      const redirectTo = `${appOrigin}/auth/callback`
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)

@@ -149,7 +149,6 @@ function ResetPasswordInner() {
     const supabase = createClient()
 
     const code     = searchParams.get('code')
-    const type     = searchParams.get('type')
     const urlError = searchParams.get('error')
 
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
@@ -161,7 +160,7 @@ function ResetPasswordInner() {
         hash: window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
         hasAccessToken: hashParams.has('access_token'),
         hasCode: !!code,
-        type: type ?? hashParams.get('type'),
+        type: hashParams.get('type') ?? (code ? 'pkce' : null),
         sessionStatus: 'checking…',
       })
     }
@@ -173,10 +172,10 @@ function ResetPasswordInner() {
     }
 
     // ── Path 1: PKCE recovery — code forwarded here by /auth/callback ─────
-    // The callback route does NOT exchange the code server-side for recovery
-    // flows because the proxy's getUser() would consume the session before
-    // this page renders. Instead we exchange it here client-side.
-    if (code && type === 'recovery') {
+    // /auth/callback exchanges the code server-side, detects recovery via AMR
+    // claims, then redirects here with ?code= so the CLIENT exchanges it too.
+    // This bypasses the proxy's getUser() consuming the session prematurely.
+    if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
         if (process.env.NODE_ENV === 'development') {
           setDebugInfo((d) => d ? { ...d, sessionStatus: exchangeError ? `exchange error: ${exchangeError.message}` : 'code exchanged OK' } : d)
@@ -223,9 +222,17 @@ function ResetPasswordInner() {
       }
     }
 
-    // ── Path 3: No code, no hash — invalid or direct navigation ──────────
-    setErrorMessage('No valid reset token found. Please request a new password reset link.')
-    setScreen('error')
+    // ── Path 3: No code, no hash — check for an existing recovery session ─
+    // Some older Supabase setups use implicit flow (no PKCE). If the server
+    // already set a valid session cookie, show the form directly.
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) {
+        setScreen('form')
+      } else {
+        setErrorMessage('No valid reset token found. Please request a new password reset link.')
+        setScreen('error')
+      }
+    })
   }, [searchParams])
 
   // ── Validation ────────────────────────────────────────────────────────────
