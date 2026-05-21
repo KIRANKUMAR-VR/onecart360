@@ -145,14 +145,37 @@ function ResetPasswordInner() {
   const searchParams = useSearchParams()
 
   // ── Token / session verification ──────────────────────────────────────────
+  //
+  // HOW SUPABASE PASSWORD RECOVERY WORKS:
+  //
+  // 1. User requests reset → Supabase sends email with link to:
+  //      https://onecart360.com/auth/callback?code=XXX&type=recovery
+  //
+  // 2. /auth/callback sees type=recovery → does NOT exchange server-side
+  //    (to avoid proxy consuming the session) → redirects here with ?code=XXX
+  //
+  // 3. THIS page calls exchangeCodeForSession(code) CLIENT-SIDE.
+  //    The client owns the session. The proxy's getUser() runs on subsequent
+  //    requests but by then the session cookie is already set correctly.
+  //
+  // 4. updateUser({ password }) can now succeed because the client session is valid.
+  //
+  // WHY LINKS "EXPIRE" WITHOUT THIS FIX:
+  //   The callback route exchanged the code server-side, setting a session cookie.
+  //   The proxy middleware then called getUser() on the redirect, which refreshed
+  //   (and effectively consumed) the one-time recovery session.
+  //   When the client tried to exchange the same code again → already used → error.
+  //
   useEffect(() => {
     const supabase = createClient()
 
-    const code     = searchParams.get('code')
-    const urlError = searchParams.get('error')
+    const code      = searchParams.get('code')
+    const tokenHash = searchParams.get('token_hash')
+    const urlError  = searchParams.get('error')
 
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
-    const hasHashToken = hashParams.has('access_token') && hashParams.get('type') === 'recovery'
+    const hasHashToken =
+      hashParams.has('access_token') && hashParams.get('type') === 'recovery'
 
     if (process.env.NODE_ENV === 'development') {
       setDebugInfo({
@@ -160,31 +183,31 @@ function ResetPasswordInner() {
         hash: window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
         hasAccessToken: hashParams.has('access_token'),
         hasCode: !!code,
-        type: hashParams.get('type') ?? (code ? 'pkce' : null),
+        type: hashParams.get('type') ?? searchParams.get('type') ?? (code ? 'pkce' : null),
         sessionStatus: 'checking…',
       })
     }
 
-    if (urlError === 'invalid_token') {
-      setErrorMessage('This password reset link is invalid or has expired.')
+    if (urlError) {
+      setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
       setScreen('error')
       return
     }
 
-    // ── Path 1: PKCE recovery — code forwarded here by /auth/callback ─────
-    // /auth/callback exchanges the code server-side, detects recovery via AMR
-    // claims, then redirects here with ?code= so the CLIENT exchanges it too.
-    // This bypasses the proxy's getUser() consuming the session prematurely.
+    // ── Path 1: PKCE flow — ?code= forwarded from /auth/callback ─────────
+    // The callback route did NOT exchange this code server-side (intentionally).
+    // We exchange it here once, client-side, so the proxy cannot interfere.
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
         if (process.env.NODE_ENV === 'development') {
-          setDebugInfo((d) => d ? { ...d, sessionStatus: exchangeError ? `exchange error: ${exchangeError.message}` : 'code exchanged OK' } : d)
+          setDebugInfo((d) => d
+            ? { ...d, sessionStatus: exchangeError ? `exchange error: ${exchangeError.message}` : 'code exchanged — session active' }
+            : d)
         }
         if (exchangeError) {
           setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
           setScreen('error')
         } else {
-          // Clean up the code from the URL so it cannot be replayed
           window.history.replaceState({}, '', '/auth/reset-password')
           setScreen('form')
         }
@@ -192,9 +215,29 @@ function ResetPasswordInner() {
       return
     }
 
-    // ── Path 2: Hash-fragment recovery — listen for PASSWORD_RECOVERY event ─
-    // Supabase JS automatically processes #access_token=...&type=recovery from
-    // window.location.hash and fires the PASSWORD_RECOVERY event.
+    // ── Path 2: token_hash flow — ?token_hash=&type=recovery ──────────────
+    // Used by some Supabase email templates. Exchange via verifyOtp.
+    if (tokenHash) {
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: otpError }) => {
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d
+            ? { ...d, sessionStatus: otpError ? `otp error: ${otpError.message}` : 'otp verified — session active' }
+            : d)
+        }
+        if (otpError) {
+          setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
+          setScreen('error')
+        } else {
+          window.history.replaceState({}, '', '/auth/reset-password')
+          setScreen('form')
+        }
+      })
+      return
+    }
+
+    // ── Path 3: Hash-fragment flow — #access_token=...&type=recovery ──────
+    // Supabase JS processes window.location.hash automatically on init and
+    // fires PASSWORD_RECOVERY. Register the listener first, then wait.
     if (hasHashToken) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
         if (process.env.NODE_ENV === 'development') {
@@ -222,17 +265,9 @@ function ResetPasswordInner() {
       }
     }
 
-    // ── Path 3: No code, no hash — check for an existing recovery session ─
-    // Some older Supabase setups use implicit flow (no PKCE). If the server
-    // already set a valid session cookie, show the form directly.
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) {
-        setScreen('form')
-      } else {
-        setErrorMessage('No valid reset token found. Please request a new password reset link.')
-        setScreen('error')
-      }
-    })
+    // ── Path 4: No token at all — invalid or direct navigation ────────────
+    setErrorMessage('No valid reset token found. Please request a new password reset link.')
+    setScreen('error')
   }, [searchParams])
 
   // ── Validation ────────────────────────────────────────────────────────────

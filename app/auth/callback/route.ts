@@ -1,47 +1,68 @@
 import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
+/**
+ * Auth Callback Route
+ *
+ * Supabase sends users here after clicking an email link.
+ * The URL contains either:
+ *   - ?code=XXX  (PKCE flow — default for modern Supabase)
+ *   - #access_token=XXX&type=recovery  (implicit/hash flow — legacy)
+ *
+ * CRITICAL: For password recovery, we must NOT exchange the code server-side.
+ * Reason: The proxy middleware calls supabase.auth.getUser() on every request,
+ * which refreshes the session. If we exchange server-side and then redirect,
+ * the proxy consumes the recovery session before the client page loads.
+ * The client then cannot call updateUser() because the session is gone.
+ *
+ * Solution: Forward the raw code to /auth/reset-password and let the CLIENT
+ * call exchangeCodeForSession() exactly once, after which it owns the session.
+ */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
   const code = searchParams.get('code')
+  const type = searchParams.get('type')         // Supabase sets this on its verify URLs
+  const tokenHash = searchParams.get('token_hash') // alternative token format
   const next = searchParams.get('next') ?? '/'
 
-  if (!code) {
-    // No code — could be a hash-fragment flow (#access_token=...&type=recovery).
-    // The server never sees hash fragments. Send to reset-password and let the
-    // client-side Supabase JS detect the token from window.location.hash.
-    return NextResponse.redirect(`${origin}/auth/reset-password`)
-  }
-
-  // Exchange the PKCE code for a session server-side.
-  const supabase = await createClient()
-  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-
-  if (error) {
-    console.error('[auth/callback] exchangeCodeForSession error:', error.message)
-    return NextResponse.redirect(`${origin}/auth/reset-password?error=invalid_token`)
-  }
-
-  // Detect if this is a password recovery flow by inspecting the session's
-  // AMR (Authentication Methods Reference) claims. Supabase sets amr to
-  // ["otp"] with a method of "otp" for recovery sessions.
-  // This is more reliable than reading ?type= from the URL.
-  const amr = (data.session as { amr?: Array<{ method: string }> } | null)?.amr
-  const isRecovery =
-    Array.isArray(amr) && amr.some((a) => a.method === 'otp') &&
-    data.session?.user?.recovery_sent_at != null
-
-  if (isRecovery) {
-    // Pass the code to reset-password so the CLIENT re-exchanges it.
-    // The server session is about to be consumed by the proxy's getUser(),
-    // so we cannot rely on the server-side session surviving to the next page.
-    // The client will call exchangeCodeForSession(code) again — Supabase
-    // handles duplicate exchanges gracefully when using PKCE.
+  // ── Recovery flow (PKCE) ──────────────────────────────────────────────────
+  // Supabase appends ?type=recovery to the callback URL for password resets.
+  // Forward the raw code to the reset-password page for CLIENT-side exchange.
+  if (code && type === 'recovery') {
     const url = new URL(`${origin}/auth/reset-password`)
     url.searchParams.set('code', code)
     return NextResponse.redirect(url.toString())
   }
 
-  // All other flows (email confirm, OAuth, magic link): use the server session.
-  return NextResponse.redirect(`${origin}${next}`)
+  // ── Recovery flow (token_hash) ────────────────────────────────────────────
+  // Some Supabase email templates use token_hash + type instead of a PKCE code.
+  if (tokenHash && type === 'recovery') {
+    const url = new URL(`${origin}/auth/reset-password`)
+    url.searchParams.set('token_hash', tokenHash)
+    url.searchParams.set('type', 'recovery')
+    return NextResponse.redirect(url.toString())
+  }
+
+  // ── Hash-fragment flow ────────────────────────────────────────────────────
+  // The server never sees URL hash fragments (#access_token=...&type=recovery).
+  // If there is no code and type is recovery, redirect cleanly so the client
+  // JS can read window.location.hash and fire PASSWORD_RECOVERY.
+  if (!code && type === 'recovery') {
+    return NextResponse.redirect(`${origin}/auth/reset-password`)
+  }
+
+  // ── All other flows (email confirm, OAuth, magic link) ────────────────────
+  // These are safe to exchange server-side — the proxy consuming the session
+  // is fine because subsequent requests just use the refreshed session cookie.
+  if (code) {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      return NextResponse.redirect(`${origin}${next}`)
+    }
+    console.error('[auth/callback] exchangeCodeForSession error:', error.message)
+    return NextResponse.redirect(`${origin}/auth/login?error=auth_error`)
+  }
+
+  return NextResponse.redirect(`${origin}/auth/login`)
 }
