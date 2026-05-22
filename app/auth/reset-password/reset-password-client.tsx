@@ -144,86 +144,54 @@ function ResetPasswordInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
-  // ── Token / session verification ──────────────────────────────────────────
+  // ── Session / token verification ──────────────────────────────────────────
   //
-  // HOW SUPABASE PASSWORD RECOVERY WORKS:
+  // FLOW (PKCE — primary path):
+  //   1. /auth/callback exchanges the code server-side → sets session cookies
+  //   2. Redirects here (no ?code= in URL — clean redirect)
+  //   3. Supabase browser client initialises, reads session from cookies,
+  //      and fires onAuthStateChange with event = 'PASSWORD_RECOVERY'
+  //   4. We catch that event and show the password form
   //
-  // 1. User requests reset → Supabase sends email with link to:
-  //      https://onecart360.com/auth/callback?code=XXX&type=recovery
-  //
-  // 2. /auth/callback sees type=recovery → does NOT exchange server-side
-  //    (to avoid proxy consuming the session) → redirects here with ?code=XXX
-  //
-  // 3. THIS page calls exchangeCodeForSession(code) CLIENT-SIDE.
-  //    The client owns the session. The proxy's getUser() runs on subsequent
-  //    requests but by then the session cookie is already set correctly.
-  //
-  // 4. updateUser({ password }) can now succeed because the client session is valid.
-  //
-  // WHY LINKS "EXPIRE" WITHOUT THIS FIX:
-  //   The callback route exchanged the code server-side, setting a session cookie.
-  //   The proxy middleware then called getUser() on the redirect, which refreshed
-  //   (and effectively consumed) the one-time recovery session.
-  //   When the client tried to exchange the same code again → already used → error.
+  // ALTERNATIVE PATHS:
+  //   - ?token_hash=  → exchange via verifyOtp() client-side
+  //   - #access_token= → handled by Supabase JS automatically (fires PASSWORD_RECOVERY)
+  //   - ?error=        → link was invalid/expired
   //
   useEffect(() => {
     const supabase = createClient()
 
-    const code      = searchParams.get('code')
     const tokenHash = searchParams.get('token_hash')
     const urlError  = searchParams.get('error')
 
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
-    const hasHashToken =
-      hashParams.has('access_token') && hashParams.get('type') === 'recovery'
+    const hasHashToken = hashParams.has('access_token') && hashParams.get('type') === 'recovery'
+
+    console.log('[reset-password] init — tokenHash:', !!tokenHash, '| hashToken:', hasHashToken, '| error:', urlError)
 
     if (process.env.NODE_ENV === 'development') {
       setDebugInfo({
         url: window.location.href,
         hash: window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
         hasAccessToken: hashParams.has('access_token'),
-        hasCode: !!code,
-        type: hashParams.get('type') ?? searchParams.get('type') ?? (code ? 'pkce' : null),
+        hasCode: false,
+        type: hashParams.get('type') ?? searchParams.get('type') ?? 'pkce-server-exchanged',
         sessionStatus: 'checking…',
       })
     }
 
     if (urlError) {
+      console.log('[reset-password] URL error param:', urlError)
       setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
       setScreen('error')
       return
     }
 
-    // ── Path 1: PKCE flow — ?code= forwarded from /auth/callback ─────────
-    // The callback route did NOT exchange this code server-side (intentionally).
-    // We exchange it here once, client-side, so the proxy cannot interfere.
-    if (code) {
-      supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
-        if (process.env.NODE_ENV === 'development') {
-          setDebugInfo((d) => d
-            ? { ...d, sessionStatus: exchangeError ? `exchange error: ${exchangeError.message}` : 'code exchanged — session active' }
-            : d)
-        }
-        if (exchangeError) {
-          setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
-          setScreen('error')
-        } else {
-          window.history.replaceState({}, '', '/auth/reset-password')
-          setScreen('form')
-        }
-      })
-      return
-    }
-
-    // ── Path 2: token_hash flow — ?token_hash=&type=recovery ──────────────
-    // Used by some Supabase email templates. Exchange via verifyOtp.
+    // ── Path A: token_hash (alternative Supabase email template) ──────────
     if (tokenHash) {
+      console.log('[reset-password] Path A: verifyOtp with token_hash')
       supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: otpError }) => {
-        if (process.env.NODE_ENV === 'development') {
-          setDebugInfo((d) => d
-            ? { ...d, sessionStatus: otpError ? `otp error: ${otpError.message}` : 'otp verified — session active' }
-            : d)
-        }
+        console.log('[reset-password] verifyOtp result — error:', otpError?.message ?? null)
         if (otpError) {
           setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
           setScreen('error')
@@ -235,39 +203,60 @@ function ResetPasswordInner() {
       return
     }
 
-    // ── Path 3: Hash-fragment flow — #access_token=...&type=recovery ──────
-    // Supabase JS processes window.location.hash automatically on init and
-    // fires PASSWORD_RECOVERY. Register the listener first, then wait.
-    if (hasHashToken) {
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-        if (process.env.NODE_ENV === 'development') {
-          setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
-        }
-        if (event === 'PASSWORD_RECOVERY') {
-          window.history.replaceState({}, '', '/auth/reset-password')
-          setScreen('form')
-        }
-      })
-
-      const timer = setTimeout(() => {
-        setScreen((s) => {
-          if (s === 'verifying') {
-            setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
-            return 'error'
-          }
-          return s
-        })
-      }, 10000)
-
-      return () => {
-        subscription.unsubscribe()
-        clearTimeout(timer)
+    // ── Path B: PKCE (server-exchanged) + Hash-fragment ───────────────────
+    // For PKCE: the callback already exchanged the code and set session cookies.
+    // Supabase browser client reads those cookies on init and fires either
+    // PASSWORD_RECOVERY or SIGNED_IN. We accept both here because the context
+    // (arriving at this page) means the intent is always password recovery.
+    //
+    // For hash-fragment: Supabase JS processes #access_token automatically
+    // and fires PASSWORD_RECOVERY.
+    //
+    // Register the listener BEFORE getSession so no events are missed.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('[reset-password] onAuthStateChange — event:', event, '| session:', !!session)
+      if (process.env.NODE_ENV === 'development') {
+        setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
       }
-    }
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+        console.log('[reset-password] recovery session confirmed — showing form')
+        window.history.replaceState({}, '', '/auth/reset-password')
+        setScreen('form')
+      }
+    })
 
-    // ── Path 4: No token at all — invalid or direct navigation ────────────
-    setErrorMessage('No valid reset token found. Please request a new password reset link.')
-    setScreen('error')
+    // Also check existing session immediately — handles the case where the
+    // onAuthStateChange INITIAL_SESSION event already fired before we subscribed.
+    supabase.auth.getSession().then(({ data: { session }, error: sessionError }) => {
+      console.log('[reset-password] getSession — session:', !!session, '| error:', sessionError?.message ?? null)
+      if (process.env.NODE_ENV === 'development') {
+        setDebugInfo((d) => d
+          ? { ...d, sessionStatus: session ? 'session present' : sessionError ? `error: ${sessionError.message}` : 'no session' }
+          : d)
+      }
+      if (session) {
+        console.log('[reset-password] existing session found — showing form')
+        window.history.replaceState({}, '', '/auth/reset-password')
+        setScreen('form')
+      }
+    })
+
+    // Timeout: if no session event fires within 12s, show error
+    const timer = setTimeout(() => {
+      setScreen((s) => {
+        if (s === 'verifying') {
+          console.log('[reset-password] timeout — no session found')
+          setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
+          return 'error'
+        }
+        return s
+      })
+    }, 12000)
+
+    return () => {
+      subscription.unsubscribe()
+      clearTimeout(timer)
+    }
   }, [searchParams])
 
   // ── Validation ────────────────────────────────────────────────────────────

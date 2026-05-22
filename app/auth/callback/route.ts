@@ -2,67 +2,78 @@ import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
- * Auth Callback Route
+ * Auth Callback — handles all Supabase email link flows.
  *
- * Supabase sends users here after clicking an email link.
- * The URL contains either:
- *   - ?code=XXX  (PKCE flow — default for modern Supabase)
- *   - #access_token=XXX&type=recovery  (implicit/hash flow — legacy)
+ * For password recovery the flow is:
+ *   1. Supabase emails: https://onecart360.com/auth/callback?code=XXX
+ *   2. This route exchanges the code server-side → session cookies set
+ *   3. Redirects to /auth/reset-password
+ *   4. The reset-password page uses onAuthStateChange to pick up the
+ *      PASSWORD_RECOVERY event fired by the Supabase JS client when it
+ *      detects the server-set session on load.
  *
- * CRITICAL: For password recovery, we must NOT exchange the code server-side.
- * Reason: The proxy middleware calls supabase.auth.getUser() on every request,
- * which refreshes the session. If we exchange server-side and then redirect,
- * the proxy consumes the recovery session before the client page loads.
- * The client then cannot call updateUser() because the session is gone.
- *
- * Solution: Forward the raw code to /auth/reset-password and let the CLIENT
- * call exchangeCodeForSession() exactly once, after which it owns the session.
+ * The proxy's getUser() runs AFTER the cookies are set by exchangeCodeForSession,
+ * so it refreshes (not consumes) the session. updateUser() then succeeds because
+ * the session cookie is valid and the client picks it up via onAuthStateChange.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
-  const code = searchParams.get('code')
-  const type = searchParams.get('type')         // Supabase sets this on its verify URLs
-  const tokenHash = searchParams.get('token_hash') // alternative token format
-  const next = searchParams.get('next') ?? '/'
+  const code      = searchParams.get('code')
+  const tokenHash = searchParams.get('token_hash')
+  const type      = searchParams.get('type')
+  const next      = searchParams.get('next') ?? '/dashboard'
 
-  // ── Recovery flow (PKCE) ──────────────────────────────────────────────────
-  // Supabase appends ?type=recovery to the callback URL for password resets.
-  // Forward the raw code to the reset-password page for CLIENT-side exchange.
-  if (code && type === 'recovery') {
-    const url = new URL(`${origin}/auth/reset-password`)
-    url.searchParams.set('code', code)
-    return NextResponse.redirect(url.toString())
+  console.log('[auth/callback] hit — code:', !!code, '| token_hash:', !!tokenHash, '| type:', type)
+
+  // ── PKCE code flow (primary — used by modern Supabase) ────────────────────
+  if (code) {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+    console.log('[auth/callback] exchange result — user:', data?.user?.id ?? null, '| error:', error?.message ?? null)
+
+    if (error) {
+      console.error('[auth/callback] exchangeCodeForSession failed:', error.message)
+      return NextResponse.redirect(`${origin}/auth/forgot-password?error=link_expired`)
+    }
+
+    // Detect recovery: Supabase sets type=recovery in the URL it generates,
+    // OR we can check if the user arrived via a password recovery flow by
+    // looking at the AMR (Authentication Methods Reference) claims.
+    const isRecovery =
+      type === 'recovery' ||
+      (data.session?.user?.recovery_sent_at &&
+        new Date(data.session.user.recovery_sent_at).getTime() >
+          Date.now() - 24 * 60 * 60 * 1000) // within 24h
+
+    console.log('[auth/callback] isRecovery:', isRecovery)
+
+    if (isRecovery) {
+      // Redirect to reset-password. The session is now in cookies.
+      // The client page uses onAuthStateChange which fires PASSWORD_RECOVERY
+      // when the Supabase JS client initialises and finds the recovery session.
+      return NextResponse.redirect(`${origin}/auth/reset-password`)
+    }
+
+    return NextResponse.redirect(`${origin}${next}`)
   }
 
-  // ── Recovery flow (token_hash) ────────────────────────────────────────────
-  // Some Supabase email templates use token_hash + type instead of a PKCE code.
+  // ── token_hash flow (alternative Supabase email template format) ──────────
   if (tokenHash && type === 'recovery') {
+    console.log('[auth/callback] token_hash recovery flow')
     const url = new URL(`${origin}/auth/reset-password`)
     url.searchParams.set('token_hash', tokenHash)
     url.searchParams.set('type', 'recovery')
     return NextResponse.redirect(url.toString())
   }
 
-  // ── Hash-fragment flow ────────────────────────────────────────────────────
-  // The server never sees URL hash fragments (#access_token=...&type=recovery).
-  // If there is no code and type is recovery, redirect cleanly so the client
-  // JS can read window.location.hash and fire PASSWORD_RECOVERY.
-  if (!code && type === 'recovery') {
+  // ── Hash-fragment flow — server never sees #access_token ─────────────────
+  // The client JS reads window.location.hash and fires PASSWORD_RECOVERY.
+  if (type === 'recovery') {
+    console.log('[auth/callback] hash-fragment recovery flow — redirecting to reset-password')
     return NextResponse.redirect(`${origin}/auth/reset-password`)
   }
 
-  // ── All other flows (email confirm, OAuth, magic link) ────────────────────
-  // These are safe to exchange server-side — the proxy consuming the session
-  // is fine because subsequent requests just use the refreshed session cookie.
-  if (code) {
-    const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      return NextResponse.redirect(`${origin}${next}`)
-    }
-    console.error('[auth/callback] exchangeCodeForSession error:', error.message)
-    return NextResponse.redirect(`${origin}/auth/login?error=auth_error`)
-  }
-
+  console.log('[auth/callback] no code/token — redirecting to login')
   return NextResponse.redirect(`${origin}/auth/login`)
 }
