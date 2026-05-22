@@ -1,20 +1,26 @@
-import { createClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 /**
  * Auth Callback — handles all Supabase email link flows.
  *
- * For password recovery the flow is:
+ * PASSWORD RECOVERY FLOW (mobile-safe):
  *   1. Supabase emails: https://onecart360.com/auth/callback?code=XXX
- *   2. This route exchanges the code server-side → session cookies set
- *   3. Redirects to /auth/reset-password
- *   4. The reset-password page uses onAuthStateChange to pick up the
- *      PASSWORD_RECOVERY event fired by the Supabase JS client when it
- *      detects the server-set session on load.
+ *   2. This route detects the recovery type and forwards the raw code to
+ *      /auth/reset-password?code=XXX — NO server-side exchange.
+ *   3. The client page calls exchangeCodeForSession(code) in the browser.
  *
- * The proxy's getUser() runs AFTER the cookies are set by exchangeCodeForSession,
- * so it refreshes (not consumes) the session. updateUser() then succeeds because
- * the session cookie is valid and the client picks it up via onAuthStateChange.
+ * WHY NOT SERVER-SIDE EXCHANGE FOR RECOVERY:
+ *   On iPhone Safari / Gmail in-app browser, cookies set during a cross-origin
+ *   redirect chain (Supabase → your app) are blocked by SameSite=Lax policy.
+ *   The session cookie from exchangeCodeForSession never reaches the browser.
+ *   The client finds no session, and after the timeout shows "Link Expired".
+ *   Passing the raw code to the client and exchanging there bypasses this
+ *   entirely — no cookies needed for the exchange itself.
+ *
+ * ALL OTHER FLOWS (email confirm, OAuth, magic link):
+ *   Exchanged server-side as normal — these don't have the same issue because
+ *   they redirect to a page that doesn't require the session to be available
+ *   immediately in the same render cycle.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
@@ -23,57 +29,39 @@ export async function GET(request: NextRequest) {
   const type      = searchParams.get('type')
   const next      = searchParams.get('next') ?? '/dashboard'
 
-  console.log('[auth/callback] hit — code:', !!code, '| token_hash:', !!tokenHash, '| type:', type)
+  // ── Password recovery — forward code to client ────────────────────────────
+  // For recovery flows we NEVER exchange server-side. We pass the raw code
+  // to the reset-password page so the client exchanges it in the browser,
+  // which works correctly on all mobile browsers including iPhone Safari and
+  // Gmail in-app browser (avoids SameSite cookie restrictions).
+  if (type === 'recovery') {
+    const url = new URL(`${origin}/auth/reset-password`)
+    if (code)      url.searchParams.set('code', code)
+    if (tokenHash) url.searchParams.set('token_hash', tokenHash)
+    url.searchParams.set('type', 'recovery')
+    return NextResponse.redirect(url.toString())
+  }
 
-  // ── PKCE code flow (primary — used by modern Supabase) ────────────────────
+  // ── PKCE code flow — all other flows (email confirm, OAuth, etc.) ─────────
   if (code) {
+    const { createClient } = await import('@/lib/supabase/server')
     const supabase = await createClient()
     const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    console.log('[auth/callback] exchange result — user:', data?.user?.id ?? null, '| error:', error?.message ?? null)
-
     if (error) {
-      console.error('[auth/callback] exchangeCodeForSession failed:', error.message)
-      return NextResponse.redirect(`${origin}/auth/forgot-password?error=link_expired`)
-    }
-
-    // Detect recovery: Supabase sets type=recovery in the URL it generates,
-    // OR we can check if the user arrived via a password recovery flow by
-    // looking at the AMR (Authentication Methods Reference) claims.
-    const isRecovery =
-      type === 'recovery' ||
-      (data.session?.user?.recovery_sent_at &&
-        new Date(data.session.user.recovery_sent_at).getTime() >
-          Date.now() - 24 * 60 * 60 * 1000) // within 24h
-
-    console.log('[auth/callback] isRecovery:', isRecovery)
-
-    if (isRecovery) {
-      // Redirect to reset-password. The session is now in cookies.
-      // The client page uses onAuthStateChange which fires PASSWORD_RECOVERY
-      // when the Supabase JS client initialises and finds the recovery session.
-      return NextResponse.redirect(`${origin}/auth/reset-password`)
+      return NextResponse.redirect(`${origin}/auth/login?error=auth_error`)
     }
 
     return NextResponse.redirect(`${origin}${next}`)
   }
 
-  // ── token_hash flow (alternative Supabase email template format) ──────────
-  if (tokenHash && type === 'recovery') {
-    console.log('[auth/callback] token_hash recovery flow')
+  // ── token_hash without type=recovery — forward to reset-password ──────────
+  if (tokenHash) {
     const url = new URL(`${origin}/auth/reset-password`)
     url.searchParams.set('token_hash', tokenHash)
-    url.searchParams.set('type', 'recovery')
+    url.searchParams.set('type', type ?? 'recovery')
     return NextResponse.redirect(url.toString())
   }
 
-  // ── Hash-fragment flow — server never sees #access_token ─────────────────
-  // The client JS reads window.location.hash and fires PASSWORD_RECOVERY.
-  if (type === 'recovery') {
-    console.log('[auth/callback] hash-fragment recovery flow — redirecting to reset-password')
-    return NextResponse.redirect(`${origin}/auth/reset-password`)
-  }
-
-  console.log('[auth/callback] no code/token — redirecting to login')
   return NextResponse.redirect(`${origin}/auth/login`)
 }

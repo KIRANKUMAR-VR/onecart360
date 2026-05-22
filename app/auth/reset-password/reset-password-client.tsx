@@ -146,52 +146,79 @@ function ResetPasswordInner() {
 
   // ── Session / token verification ──────────────────────────────────────────
   //
-  // FLOW (PKCE — primary path):
-  //   1. /auth/callback exchanges the code server-side → sets session cookies
-  //   2. Redirects here (no ?code= in URL — clean redirect)
-  //   3. Supabase browser client initialises, reads session from cookies,
-  //      and fires onAuthStateChange with event = 'PASSWORD_RECOVERY'
-  //   4. We catch that event and show the password form
+  // MOBILE-SAFE FLOW (primary path — PKCE):
+  //   1. /auth/callback forwards ?code=XXX&type=recovery to this page
+  //      WITHOUT server-side exchange (avoids SameSite cookie issues on iOS)
+  //   2. We call exchangeCodeForSession(code) HERE in the browser
+  //   3. On success → show password form
+  //
+  // This works on iPhone Safari, Gmail in-app browser, and all mobile browsers
+  // because the code exchange happens in the same browser context with no
+  // cross-origin redirect cookies required.
   //
   // ALTERNATIVE PATHS:
-  //   - ?token_hash=  → exchange via verifyOtp() client-side
-  //   - #access_token= → handled by Supabase JS automatically (fires PASSWORD_RECOVERY)
-  //   - ?error=        → link was invalid/expired
+  //   - ?token_hash=  → verifyOtp() client-side
+  //   - #access_token= → Supabase JS fires PASSWORD_RECOVERY automatically
+  //   - ?error=        → link invalid/expired
   //
   useEffect(() => {
     const supabase = createClient()
 
+    const code      = searchParams.get('code')
     const tokenHash = searchParams.get('token_hash')
     const urlError  = searchParams.get('error')
 
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
     const hasHashToken = hashParams.has('access_token') && hashParams.get('type') === 'recovery'
 
-    console.log('[reset-password] init — tokenHash:', !!tokenHash, '| hashToken:', hasHashToken, '| error:', urlError)
-
     if (process.env.NODE_ENV === 'development') {
       setDebugInfo({
-        url: window.location.href,
-        hash: window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
+        url:            window.location.href,
+        hash:           window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
         hasAccessToken: hashParams.has('access_token'),
-        hasCode: false,
-        type: hashParams.get('type') ?? searchParams.get('type') ?? 'pkce-server-exchanged',
-        sessionStatus: 'checking…',
+        hasCode:        !!code,
+        type:           hashParams.get('type') ?? searchParams.get('type') ?? null,
+        sessionStatus:  'checking…',
       })
     }
 
+    // ── Error in URL ───────────────────────────────────────────────────────
     if (urlError) {
-      console.log('[reset-password] URL error param:', urlError)
       setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
       setScreen('error')
       return
     }
 
-    // ── Path A: token_hash (alternative Supabase email template) ──────────
+    // ── Path 1: PKCE code (primary — works on all browsers including iOS) ──
+    // The callback forwarded the raw code here without server-side exchange.
+    // We exchange it client-side so no cross-origin cookies are involved.
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error: exchangeError }) => {
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d
+            ? { ...d, sessionStatus: exchangeError ? `exchange error: ${exchangeError.message}` : 'code exchanged — session active' }
+            : d)
+        }
+        if (exchangeError) {
+          setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
+          setScreen('error')
+        } else {
+          // Clean URL — remove code so it cannot be replayed on refresh
+          window.history.replaceState({}, '', '/auth/reset-password')
+          setScreen('form')
+        }
+      })
+      return
+    }
+
+    // ── Path 2: token_hash (OTP-style Supabase email templates) ───────────
     if (tokenHash) {
-      console.log('[reset-password] Path A: verifyOtp with token_hash')
       supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: otpError }) => {
-        console.log('[reset-password] verifyOtp result — error:', otpError?.message ?? null)
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d
+            ? { ...d, sessionStatus: otpError ? `otp error: ${otpError.message}` : 'otp verified — session active' }
+            : d)
+        }
         if (otpError) {
           setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
           setScreen('error')
@@ -203,60 +230,62 @@ function ResetPasswordInner() {
       return
     }
 
-    // ── Path B: PKCE (server-exchanged) + Hash-fragment ───────────────────
-    // For PKCE: the callback already exchanged the code and set session cookies.
-    // Supabase browser client reads those cookies on init and fires either
-    // PASSWORD_RECOVERY or SIGNED_IN. We accept both here because the context
-    // (arriving at this page) means the intent is always password recovery.
-    //
-    // For hash-fragment: Supabase JS processes #access_token automatically
-    // and fires PASSWORD_RECOVERY.
-    //
-    // Register the listener BEFORE getSession so no events are missed.
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('[reset-password] onAuthStateChange — event:', event, '| session:', !!session)
-      if (process.env.NODE_ENV === 'development') {
-        setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
-      }
-      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
-        console.log('[reset-password] recovery session confirmed — showing form')
-        window.history.replaceState({}, '', '/auth/reset-password')
-        setScreen('form')
-      }
-    })
-
-    // Also check existing session immediately — handles the case where the
-    // onAuthStateChange INITIAL_SESSION event already fired before we subscribed.
-    supabase.auth.getSession().then(({ data: { session }, error: sessionError }) => {
-      console.log('[reset-password] getSession — session:', !!session, '| error:', sessionError?.message ?? null)
-      if (process.env.NODE_ENV === 'development') {
-        setDebugInfo((d) => d
-          ? { ...d, sessionStatus: session ? 'session present' : sessionError ? `error: ${sessionError.message}` : 'no session' }
-          : d)
-      }
-      if (session) {
-        console.log('[reset-password] existing session found — showing form')
-        window.history.replaceState({}, '', '/auth/reset-password')
-        setScreen('form')
-      }
-    })
-
-    // Timeout: if no session event fires within 12s, show error
-    const timer = setTimeout(() => {
-      setScreen((s) => {
-        if (s === 'verifying') {
-          console.log('[reset-password] timeout — no session found')
-          setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
-          return 'error'
+    // ── Path 3: Hash-fragment (#access_token=...&type=recovery) ───────────
+    // Supabase JS processes window.location.hash on init and fires
+    // PASSWORD_RECOVERY. Register listener before getSession to avoid race.
+    if (hasHashToken) {
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
         }
-        return s
+        if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
+          window.history.replaceState({}, '', '/auth/reset-password')
+          setScreen('form')
+        }
       })
-    }, 12000)
-
-    return () => {
-      subscription.unsubscribe()
-      clearTimeout(timer)
+      const timer = setTimeout(() => {
+        setScreen((s) => {
+          if (s === 'verifying') {
+            setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
+            return 'error'
+          }
+          return s
+        })
+      }, 12000)
+      return () => {
+        subscription.unsubscribe()
+        clearTimeout(timer)
+      }
     }
+
+    // ── Path 4: No token in URL — could be a returning session ────────────
+    // Retry getSession a few times to handle slow auth hydration on mobile.
+    let attempts = 0
+    const maxAttempts = 5
+
+    const checkSession = () => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d
+            ? { ...d, sessionStatus: session ? `session found (attempt ${attempts + 1})` : `no session (attempt ${attempts + 1})` }
+            : d)
+        }
+        if (session) {
+          window.history.replaceState({}, '', '/auth/reset-password')
+          setScreen('form')
+          return
+        }
+        attempts++
+        if (attempts < maxAttempts) {
+          setTimeout(checkSession, 1000)
+        } else {
+          setErrorMessage('No valid reset token found. Please request a new password reset link.')
+          setScreen('error')
+        }
+      })
+    }
+
+    checkSession()
   }, [searchParams])
 
   // ── Validation ────────────────────────────────────────────────────────────
