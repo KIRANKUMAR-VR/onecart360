@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ArrowLeft, XCircle, CheckCircle, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,17 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSent, setIsSent] = useState(false)
+
+  // Show a banner if redirected back here because a reset link expired
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('error') === 'link_expired') {
+        setError('That reset link has expired. Enter your email to receive a new one.')
+        window.history.replaceState({}, '', '/auth/forgot-password')
+      }
+    }
+  }, [])
 
   const validateEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)

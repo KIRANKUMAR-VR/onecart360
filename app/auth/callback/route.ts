@@ -1,26 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 /**
  * Auth Callback — handles all Supabase email link flows.
  *
- * PASSWORD RECOVERY FLOW (mobile-safe):
- *   1. Supabase emails: https://onecart360.com/auth/callback?code=XXX
- *   2. This route detects the recovery type and forwards the raw code to
- *      /auth/reset-password?code=XXX — NO server-side exchange.
- *   3. The client page calls exchangeCodeForSession(code) in the browser.
+ * PKCE PASSWORD RECOVERY FLOW:
+ *   Supabase emails a link to:  https://onecart360.com/auth/callback?code=XXX
+ *   There is NO ?type=recovery in PKCE mode — Supabase does not add it.
+ *   We detect recovery by inspecting the user's `recovery_sent_at` field
+ *   after exchangeCodeForSession(). If recovery_sent_at is recent (within
+ *   10 minutes), this is a password reset flow → redirect to reset-password
+ *   with a ?recovered=1 flag so the client knows to show the form.
  *
- * WHY NOT SERVER-SIDE EXCHANGE FOR RECOVERY:
- *   On iPhone Safari / Gmail in-app browser, cookies set during a cross-origin
- *   redirect chain (Supabase → your app) are blocked by SameSite=Lax policy.
- *   The session cookie from exchangeCodeForSession never reaches the browser.
- *   The client finds no session, and after the timeout shows "Link Expired".
- *   Passing the raw code to the client and exchanging there bypasses this
- *   entirely — no cookies needed for the exchange itself.
+ * WHY ?recovered=1 AND NOT FORWARDING THE CODE:
+ *   The server has already exchanged the code and set the session cookie.
+ *   The browser client reads that cookie and has a valid session immediately.
+ *   We just need to signal "go to reset-password" without any further exchange.
  *
- * ALL OTHER FLOWS (email confirm, OAuth, magic link):
- *   Exchanged server-side as normal — these don't have the same issue because
- *   they redirect to a page that doesn't require the session to be available
- *   immediately in the same render cycle.
+ * OTP / token_hash FLOW (Supabase email templates using {{ .ConfirmationURL }}):
+ *   These come with ?token_hash=XXX&type=recovery — forwarded to reset-password
+ *   for client-side verifyOtp().
+ *
+ * HASH FRAGMENT FLOW (#access_token=...&type=recovery):
+ *   The server never sees hash fragments. We redirect to reset-password and
+ *   the client's onAuthStateChange fires PASSWORD_RECOVERY automatically.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
@@ -29,38 +32,42 @@ export async function GET(request: NextRequest) {
   const type      = searchParams.get('type')
   const next      = searchParams.get('next') ?? '/dashboard'
 
-  // ── Password recovery — forward code to client ────────────────────────────
-  // For recovery flows we NEVER exchange server-side. We pass the raw code
-  // to the reset-password page so the client exchanges it in the browser,
-  // which works correctly on all mobile browsers including iPhone Safari and
-  // Gmail in-app browser (avoids SameSite cookie restrictions).
-  if (type === 'recovery') {
-    const url = new URL(`${origin}/auth/reset-password`)
-    if (code)      url.searchParams.set('code', code)
-    if (tokenHash) url.searchParams.set('token_hash', tokenHash)
-    url.searchParams.set('type', 'recovery')
-    return NextResponse.redirect(url.toString())
-  }
-
-  // ── PKCE code flow — all other flows (email confirm, OAuth, etc.) ─────────
-  if (code) {
-    const { createClient } = await import('@/lib/supabase/server')
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-
-    if (error) {
-      return NextResponse.redirect(`${origin}/auth/login?error=auth_error`)
-    }
-
-    return NextResponse.redirect(`${origin}${next}`)
-  }
-
-  // ── token_hash without type=recovery — forward to reset-password ──────────
+  // ── OTP / token_hash flow ─────────────────────────────────────────────────
+  // type=recovery is present — forward to reset-password for client-side verifyOtp
   if (tokenHash) {
     const url = new URL(`${origin}/auth/reset-password`)
     url.searchParams.set('token_hash', tokenHash)
     url.searchParams.set('type', type ?? 'recovery')
     return NextResponse.redirect(url.toString())
+  }
+
+  // ── PKCE code flow ────────────────────────────────────────────────────────
+  if (code) {
+    const supabase = await createClient()
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+
+    if (error) {
+      console.error('[auth/callback] exchangeCodeForSession error:', error.message)
+      return NextResponse.redirect(`${origin}/auth/forgot-password?error=link_expired`)
+    }
+
+    // Detect password recovery: Supabase sets recovery_sent_at on the user
+    // when a reset email is sent. If it's within the last 10 minutes, this
+    // is a password reset flow.
+    const user = data.user
+    const recoverySentAt = user?.recovery_sent_at
+      ? new Date(user.recovery_sent_at).getTime()
+      : null
+    const isRecovery =
+      type === 'recovery' ||
+      (recoverySentAt !== null && Date.now() - recoverySentAt < 10 * 60 * 1000)
+
+    if (isRecovery) {
+      // Session is already set via cookies — just redirect, no code needed
+      return NextResponse.redirect(`${origin}/auth/reset-password?recovered=1`)
+    }
+
+    return NextResponse.redirect(`${origin}${next}`)
   }
 
   return NextResponse.redirect(`${origin}/auth/login`)
