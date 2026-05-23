@@ -87,7 +87,7 @@ function Spinner({ className }: { className?: string }) {
 }
 
 // ── Screen types ──────────────────────────────────────────────────────────────
-type Screen = 'verifying' | 'form' | 'success' | 'error'
+type Screen = 'verifying' | 'confirm' | 'form' | 'success' | 'error'
 
 // ── Dev debug panel ───────────────────────────────────────────────────────────
 interface DebugInfo {
@@ -146,28 +146,25 @@ function ResetPasswordInner() {
 
   // ── Session / token verification ──────────────────────────────────────────
   //
-  // HOW THIS WORKS:
+  // ROOT CAUSE OF "LINK EXPIRED":
+  //   Gmail's link pre-fetcher (and Google Safe Browsing) sends a GET request
+  //   to every link in an email BEFORE the user clicks it. Since Supabase
+  //   one-time tokens are single-use, the pre-fetcher consumes the token,
+  //   so when the user actually clicks, it's already expired.
   //
-  // PRIMARY PATH (?recovered=1):
-  //   /auth/callback exchanged the PKCE code server-side, set session cookies,
-  //   detected recovery via user.recovery_sent_at, and redirected here with
-  //   ?recovered=1. The browser client reads the cookie — we just call
-  //   getSession() and show the form immediately.
+  // FIX — token_hash flow (PRIMARY PATH):
+  //   The Supabase email template links to THIS app with ?token_hash=XXX&type=recovery.
+  //   We show a "confirm" screen with a button. The token is NOT exchanged until
+  //   the user explicitly clicks "Reset My Password". Pre-fetchers see a normal
+  //   page and cannot consume the token because we don't call verifyOtp() on load.
   //
-  // OTP PATH (?token_hash=):
-  //   verifyOtp() client-side.
-  //
-  // HASH FRAGMENT PATH (#access_token=...&type=recovery):
-  //   Supabase JS fires PASSWORD_RECOVERY via onAuthStateChange.
-  //
-  // ERROR PATH (?error=):
-  //   Show "link expired" immediately.
+  // OTHER PATHS:
+  //   ?recovered=1  → PKCE flow, session already set by /auth/callback
+  //   #access_token= → hash fragment, handled by onAuthStateChange
   //
   useEffect(() => {
-    const supabase = createClient()
-
-    const recovered = searchParams.get('recovered')
     const tokenHash = searchParams.get('token_hash')
+    const recovered = searchParams.get('recovered')
     const urlError  = searchParams.get('error')
 
     const hashParams   = new URLSearchParams(window.location.hash.slice(1))
@@ -178,42 +175,36 @@ function ResetPasswordInner() {
         url:            window.location.href,
         hash:           window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
         hasAccessToken: hashParams.has('access_token'),
-        hasCode:        !!recovered,
+        hasCode:        !!recovered || !!tokenHash,
         type:           hashParams.get('type') ?? searchParams.get('type') ?? null,
         sessionStatus:  'checking…',
       })
     }
 
-    // ── Error in URL ───────────────────────────────────────────────────────
     if (urlError) {
       setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
       setScreen('error')
       return
     }
 
-    // ── Path 1: PKCE recovery — session already set by /auth/callback ─────
-    // The callback exchanged the code, detected recovery_sent_at, and set
-    // session cookies before redirecting here. We read the session from cookies.
-    if (recovered === '1') {
-      // Poll getSession — on slow mobile connections the cookie may take
-      // a few moments to be available to the browser client.
-      let attempts = 0
-      const maxAttempts = 8
+    // ── Path 1: token_hash — show confirm screen, exchange on button click ─
+    // This is the safe path: the token is not consumed until the user clicks.
+    // Pre-fetchers (Gmail, Google Safe Browsing) cannot consume it on page load.
+    if (tokenHash) {
+      setScreen('confirm')
+      return
+    }
 
+    // ── Path 2: PKCE — session already set by /auth/callback ──────────────
+    if (recovered === '1') {
+      const supabase = createClient()
+      let attempts = 0
       const checkSession = () => {
         supabase.auth.getSession().then(({ data: { session } }) => {
-          if (process.env.NODE_ENV === 'development') {
-            setDebugInfo((d) => d
-              ? { ...d, sessionStatus: session ? `session OK (attempt ${attempts + 1})` : `waiting (attempt ${attempts + 1})` }
-              : d)
-          }
           if (session) {
             window.history.replaceState({}, '', '/auth/reset-password')
             setScreen('form')
-            return
-          }
-          attempts++
-          if (attempts < maxAttempts) {
+          } else if (attempts++ < 8) {
             setTimeout(checkSession, 500)
           } else {
             setErrorMessage('Session could not be established. Please request a new reset link.')
@@ -225,54 +216,41 @@ function ResetPasswordInner() {
       return
     }
 
-    // ── Path 2: token_hash (OTP-style Supabase email templates) ───────────
-    if (tokenHash) {
-      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: otpError }) => {
-        if (process.env.NODE_ENV === 'development') {
-          setDebugInfo((d) => d
-            ? { ...d, sessionStatus: otpError ? `otp error: ${otpError.message}` : 'otp verified' }
-            : d)
-        }
-        if (otpError) {
-          setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
-          setScreen('error')
-        } else {
-          window.history.replaceState({}, '', '/auth/reset-password')
-          setScreen('form')
-        }
-      })
-      return
-    }
-
     // ── Path 3: Hash-fragment (#access_token=...&type=recovery) ───────────
     if (hasHashToken) {
+      const supabase = createClient()
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (process.env.NODE_ENV === 'development') {
-          setDebugInfo((d) => d ? { ...d, sessionStatus: `event: ${event}` } : d)
-        }
         if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && session)) {
           window.history.replaceState({}, '', '/auth/reset-password')
           setScreen('form')
         }
       })
       const timer = setTimeout(() => {
-        setScreen((s) => {
-          if (s === 'verifying') {
-            setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
-            return 'error'
-          }
-          return s
-        })
+        setScreen((s) => s === 'verifying' ? 'error' : s)
+        setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
       }, 12000)
-      return () => {
-        subscription.unsubscribe()
-        clearTimeout(timer)
-      }
+      return () => { subscription.unsubscribe(); clearTimeout(timer) }
     }
 
-    // ── Path 4: No recognisable token — show error ────────────────────────
+    // ── Path 4: No token ───────────────────────────────────────────────────
     setErrorMessage('No valid reset token found. Please request a new password reset link.')
     setScreen('error')
+  }, [searchParams])
+
+  // ── Exchange token_hash on user button click ───────────────────────────────
+  const handleConfirmReset = useCallback(async () => {
+    const tokenHash = searchParams.get('token_hash')
+    if (!tokenHash) return
+    setScreen('verifying')
+    const supabase = createClient()
+    const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' })
+    if (error) {
+      setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
+      setScreen('error')
+    } else {
+      window.history.replaceState({}, '', '/auth/reset-password')
+      setScreen('form')
+    }
   }, [searchParams])
 
   // ── Validation ────────────────────────────────────────────────────────────
@@ -361,6 +339,32 @@ function ResetPasswordInner() {
                   Please wait while we validate your reset link&hellip;
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* CONFIRM — shown on page load when token_hash is present.
+              The token is NOT exchanged here. The user must click the button.
+              This defeats Gmail/Google pre-fetch attacks that consume OTP tokens. */}
+          {screen === 'confirm' && (
+            <div className="rounded-2xl border border-border bg-card shadow-sm p-8 flex flex-col items-center gap-5 text-center">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                <Lock className="h-8 w-8 text-primary" />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-xl font-bold text-foreground">Reset Your Password</h2>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  Click the button below to continue setting your new password.
+                </p>
+              </div>
+              <Button
+                className="w-full h-11 text-base font-semibold"
+                onClick={handleConfirmReset}
+              >
+                Continue to Reset Password
+              </Button>
+              <Button asChild variant="ghost" className="w-full">
+                <Link href="/auth/login">Back to Log In</Link>
+              </Button>
             </div>
           )}
 
