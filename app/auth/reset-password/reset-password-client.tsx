@@ -144,29 +144,21 @@ function ResetPasswordInner() {
   const router       = useRouter()
   const searchParams = useSearchParams()
 
-  // ── Session / token verification ──────────────────────────────────────────
+  // ── Session verification ──────────────────────────────────────────────────
   //
-  // HOW THIS WORKS:
+  // FLOW:
+  //   1. User clicks email link → /auth/callback?code=XXX&next=/auth/reset-password
+  //   2. Callback exchanges code server-side → session cookie set → redirects here
+  //   3. This page calls getSession() → reads cookie → session found → show form
   //
-  // PRIMARY PATH (?recovered=1):
-  //   /auth/callback exchanged the PKCE code server-side, set session cookies,
-  //   detected recovery via user.recovery_sent_at, and redirected here with
-  //   ?recovered=1. The browser client reads the cookie — we just call
-  //   getSession() and show the form immediately.
-  //
-  // OTP PATH (?token_hash=):
-  //   verifyOtp() client-side.
-  //
-  // HASH FRAGMENT PATH (#access_token=...&type=recovery):
-  //   Supabase JS fires PASSWORD_RECOVERY via onAuthStateChange.
-  //
-  // ERROR PATH (?error=):
-  //   Show "link expired" immediately.
+  // ALTERNATIVE PATHS:
+  //   ?token_hash= → verifyOtp() client-side (OTP email template format)
+  //   #access_token= → onAuthStateChange fires PASSWORD_RECOVERY
+  //   ?error= → link expired/invalid
   //
   useEffect(() => {
     const supabase = createClient()
 
-    const recovered = searchParams.get('recovered')
     const tokenHash = searchParams.get('token_hash')
     const urlError  = searchParams.get('error')
 
@@ -178,60 +170,24 @@ function ResetPasswordInner() {
         url:            window.location.href,
         hash:           window.location.hash ? window.location.hash.substring(0, 60) + '…' : '',
         hasAccessToken: hashParams.has('access_token'),
-        hasCode:        !!recovered,
-        type:           hashParams.get('type') ?? searchParams.get('type') ?? null,
+        hasCode:        false,
+        type:           hashParams.get('type') ?? searchParams.get('type') ?? 'pkce-via-cookie',
         sessionStatus:  'checking…',
       })
     }
 
-    // ── Error in URL ───────────────────────────────────────────────────────
+    // ── Error param — link expired or already used ─────────────────────────
     if (urlError) {
       setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
       setScreen('error')
       return
     }
 
-    // ── Path 1: PKCE recovery — session already set by /auth/callback ─────
-    // The callback exchanged the code, detected recovery_sent_at, and set
-    // session cookies before redirecting here. We read the session from cookies.
-    if (recovered === '1') {
-      // Poll getSession — on slow mobile connections the cookie may take
-      // a few moments to be available to the browser client.
-      let attempts = 0
-      const maxAttempts = 8
-
-      const checkSession = () => {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          if (process.env.NODE_ENV === 'development') {
-            setDebugInfo((d) => d
-              ? { ...d, sessionStatus: session ? `session OK (attempt ${attempts + 1})` : `waiting (attempt ${attempts + 1})` }
-              : d)
-          }
-          if (session) {
-            window.history.replaceState({}, '', '/auth/reset-password')
-            setScreen('form')
-            return
-          }
-          attempts++
-          if (attempts < maxAttempts) {
-            setTimeout(checkSession, 500)
-          } else {
-            setErrorMessage('Session could not be established. Please request a new reset link.')
-            setScreen('error')
-          }
-        })
-      }
-      checkSession()
-      return
-    }
-
-    // ── Path 2: token_hash (OTP-style Supabase email templates) ───────────
+    // ── token_hash path (OTP-style template) ──────────────────────────────
     if (tokenHash) {
       supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error: otpError }) => {
         if (process.env.NODE_ENV === 'development') {
-          setDebugInfo((d) => d
-            ? { ...d, sessionStatus: otpError ? `otp error: ${otpError.message}` : 'otp verified' }
-            : d)
+          setDebugInfo((d) => d ? { ...d, sessionStatus: otpError ? `otp error: ${otpError.message}` : 'otp verified' } : d)
         }
         if (otpError) {
           setErrorMessage('This password reset link is invalid or has expired. Please request a new one.')
@@ -244,7 +200,7 @@ function ResetPasswordInner() {
       return
     }
 
-    // ── Path 3: Hash-fragment (#access_token=...&type=recovery) ───────────
+    // ── Hash-fragment path (#access_token=...&type=recovery) ─────────────
     if (hasHashToken) {
       const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
         if (process.env.NODE_ENV === 'development') {
@@ -270,9 +226,35 @@ function ResetPasswordInner() {
       }
     }
 
-    // ── Path 4: No recognisable token — show error ────────────────────────
-    setErrorMessage('No valid reset token found. Please request a new password reset link.')
-    setScreen('error')
+    // ── Primary path: PKCE via cookie ─────────────────────────────────────
+    // /auth/callback already exchanged the code and set a session cookie.
+    // Poll getSession() to wait for the cookie to be readable by the browser
+    // client (can take a moment on slow connections / mobile browsers).
+    let attempts = 0
+    const maxAttempts = 10
+
+    const checkSession = () => {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (process.env.NODE_ENV === 'development') {
+          setDebugInfo((d) => d
+            ? { ...d, sessionStatus: session ? `session OK (attempt ${attempts + 1})` : `waiting… (attempt ${attempts + 1}/${maxAttempts})` }
+            : d)
+        }
+        if (session) {
+          setScreen('form')
+          return
+        }
+        attempts++
+        if (attempts < maxAttempts) {
+          setTimeout(checkSession, 600)
+        } else {
+          setErrorMessage('Could not verify your session. Please request a new password reset link.')
+          setScreen('error')
+        }
+      })
+    }
+
+    checkSession()
   }, [searchParams])
 
   // ── Validation ────────────────────────────────────────────────────────────

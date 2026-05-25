@@ -50,15 +50,15 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // redirectTo must be an EXACT match (or wildcard) in the Supabase
-      // Auth > URL Configuration > Redirect URLs allowlist.
-      // Do NOT append query params — Supabase treats them as part of the URL
-      // and will reject a non-matching redirectTo, falling back to Site URL.
-      // Recovery is detected in /auth/callback via the code exchange result.
+      // redirectTo tells Supabase where to send the user after clicking the link.
+      // Supabase appends ?code=XXX to this URL (PKCE flow).
+      // We use /auth/callback?next=/auth/reset-password so the callback knows
+      // exactly where to redirect after exchanging the code — no guessing needed.
+      // This URL must be in Supabase Auth > URL Configuration > Redirect URLs.
       const appOrigin =
         process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
         window.location.origin
-      const redirectTo = `${appOrigin}/auth/callback`
+      const redirectTo = `${appOrigin}/auth/callback?next=/auth/reset-password`
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)
