@@ -2,21 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 /**
- * /auth/callback — handles all Supabase email redirect flows (PKCE).
+ * /auth/callback — PKCE code exchange handler.
  *
- * Supabase appends ?code=XXX to whatever redirectTo URL we specify.
- * For password reset we set redirectTo to:
- *   https://onecart360.com/auth/callback?next=/auth/reset-password
+ * The email template links directly to:
+ *   {{ .SiteURL }}/auth/callback?code={{ .Code }}&next=/auth/reset-password
  *
- * So this route receives:
- *   ?code=XXX&next=/auth/reset-password
+ * So this route receives ?code=XXX&next=/auth/reset-password
+ * We exchange the code, set session cookies, then redirect to `next`.
  *
- * We exchange the code server-side (sets session cookies), then redirect
- * to the `next` param. The reset-password page reads the session from
- * the cookie and shows the new-password form.
- *
- * For token_hash flows (OTP email templates) we forward to reset-password
- * for client-side verifyOtp().
+ * For token_hash (OTP-style templates) we forward directly to reset-password.
  */
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = request.nextUrl
@@ -39,14 +33,11 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code)
 
     if (error) {
-      // Link expired or already used — send back to forgot-password
       return NextResponse.redirect(
         `${origin}/auth/forgot-password?error=link_expired`
       )
     }
 
-    // Redirect to wherever `next` says — for password reset this is
-    // /auth/reset-password, which reads the session cookie we just set.
     return NextResponse.redirect(`${origin}${next}`)
   }
 
