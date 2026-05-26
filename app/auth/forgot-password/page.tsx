@@ -50,14 +50,15 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // redirectTo is the fallback used by {{ .ConfirmationURL }} in the email
-      // template if the template does not hardcode the destination.
-      // The email template uses {{ .SiteURL }}/auth/callback?code={{ .Code }}&next=/auth/reset-password
-      // directly, so this redirectTo is only a safety fallback.
+      // redirectTo tells Supabase where to send the user after clicking the link.
+      // Supabase appends ?code=XXX to this URL (PKCE flow).
+      // We use /auth/callback?next=/auth/reset-password so the callback knows
+      // exactly where to redirect after exchanging the code — no guessing needed.
+      // This URL must be in Supabase Auth > URL Configuration > Redirect URLs.
       const appOrigin =
         process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
         window.location.origin
-      const redirectTo = `${appOrigin}/auth/callback`
+      const redirectTo = `${appOrigin}/auth/callback?next=/auth/reset-password`
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)
