@@ -45,6 +45,17 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
+  const pathname = request.nextUrl.pathname
+
+  // Skip getUser() for the auth callback route.
+  // The proxy's getUser() internally tries to exchange any ?code= param it
+  // finds, which silently consumes the one-time PKCE code before the
+  // /auth/callback Route Handler can call exchangeCodeForSession(). This
+  // causes an "invalid_token" error every time a password reset link is clicked.
+  if (pathname === '/auth/callback') {
+    return supabaseResponse
+  }
+
   // Do not run code between createServerClient and
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
@@ -54,8 +65,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const pathname = request.nextUrl.pathname
 
   // Only redirect (not API routes — they handle their own 401)
   const isApiRoute = pathname.startsWith('/api/')
