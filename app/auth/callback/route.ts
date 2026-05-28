@@ -25,6 +25,15 @@ export async function GET(request: NextRequest) {
   const type      = searchParams.get('type')
   const next      = searchParams.get('next') ?? '/dashboard'
 
+  console.log('[v0] /auth/callback hit:', { 
+    hasCode: !!code, 
+    codeLength: code?.length,
+    tokenHash: !!tokenHash, 
+    type, 
+    next,
+    fullUrl: request.nextUrl.toString()
+  })
+
   // ── token_hash / OTP flow ─────────────────────────────────────────────────
   if (tokenHash) {
     const url = new URL(`${origin}/auth/reset-password`)
@@ -35,18 +44,27 @@ export async function GET(request: NextRequest) {
 
   // ── PKCE code flow ────────────────────────────────────────────────────────
   if (code) {
+    console.log('[v0] Attempting exchangeCodeForSession...')
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    console.log('[v0] exchangeCodeForSession result:', { 
+      success: !error, 
+      errorMessage: error?.message,
+      userId: data?.user?.id,
+      sessionExists: !!data?.session
+    })
 
     if (error) {
-      // Link expired or already used — send back to forgot-password
+      // Link expired or already used — send to reset-password with error param
+      // (the reset-password page has better UX for this case)
       return NextResponse.redirect(
-        `${origin}/auth/forgot-password?error=link_expired`
+        `${origin}/auth/reset-password?error=invalid_token`
       )
     }
 
     // Redirect to wherever `next` says — for password reset this is
     // /auth/reset-password, which reads the session cookie we just set.
+    console.log('[v0] Redirecting to:', next)
     return NextResponse.redirect(`${origin}${next}`)
   }
 

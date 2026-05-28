@@ -52,7 +52,10 @@ export async function updateSession(request: NextRequest) {
   // finds, which silently consumes the one-time PKCE code before the
   // /auth/callback Route Handler can call exchangeCodeForSession(). This
   // causes an "invalid_token" error every time a password reset link is clicked.
-  if (pathname === '/auth/callback') {
+  //
+  // Also skip for any URL with a ?code= param to be extra safe.
+  const hasCodeParam = request.nextUrl.searchParams.has('code')
+  if (pathname === '/auth/callback' || pathname === '/auth/callback/' || hasCodeParam) {
     return supabaseResponse
   }
 
