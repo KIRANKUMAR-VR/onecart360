@@ -46,21 +46,21 @@ export default function ForgotPasswordPage() {
       return
     }
 
-    // Use the IMPLICIT-flow client so the recovery token is NOT pkce-bound.
-    // This lets the reset link work on any device (no stored code-verifier
-    // required), while the email template's token_hash link keeps it
-    // scanner-safe via client-side verifyOtp.
-    const supabase = createImplicitClient()
+    // Use the browser client to send the reset password email
+    const supabase = createClient()
     setIsLoading(true)
 
     try {
-      // redirectTo is the fallback destination. The email template controls the
-      // actual link via {{ .TokenHash }} → /auth/reset-password?token_hash=...
-      // This URL must be allowlisted in Supabase Auth > URL Configuration.
+      // redirectTo tells Supabase where to send the user after clicking the email link.
+      // Supabase appends ?code=XXX to this URL (PKCE flow).
+      // We use /auth/callback?next=/auth/reset-password so the callback exchanges
+      // the code server-side and then redirects to reset-password with the session
+      // already set in cookies. This URL must be allowlisted in Supabase Auth >
+      // URL Configuration > Redirect URLs.
       const appOrigin =
         process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
         window.location.origin
-      const redirectTo = `${appOrigin}/auth/reset-password`
+      const redirectTo = `${appOrigin}/auth/callback?next=/auth/reset-password`
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)
