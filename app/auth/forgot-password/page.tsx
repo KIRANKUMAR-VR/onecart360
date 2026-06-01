@@ -1,12 +1,12 @@
 'use client'
 
-import { createClient } from '@/lib/supabase/client'
+import { createImplicitClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { ArrowLeft, XCircle, CheckCircle, Mail } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -17,6 +17,17 @@ export default function ForgotPasswordPage() {
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isSent, setIsSent] = useState(false)
+
+  // Show a banner if redirected back here because a reset link expired
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('error') === 'link_expired') {
+        setError('That reset link has expired. Enter your email to receive a new one.')
+        window.history.replaceState({}, '', '/auth/forgot-password')
+      }
+    }
+  }, [])
 
   const validateEmail = (value: string) =>
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
@@ -35,15 +46,21 @@ export default function ForgotPasswordPage() {
       return
     }
 
+    // Use the browser client to send the reset password email
     const supabase = createClient()
     setIsLoading(true)
 
     try {
-      // Always use window.location.origin so the reset link targets the same
-      // host the user is currently on — whether localhost, preview, or production.
-      // The /auth/callback route then handles the PKCE code exchange and routes
-      // the user to /auth/reset-password.
-      const redirectTo = `${window.location.origin}/auth/callback?type=recovery`
+      // redirectTo tells Supabase where to send the user after clicking the email link.
+      // Supabase appends ?code=XXX to this URL (PKCE flow).
+      // We use /auth/callback?next=/auth/reset-password so the callback exchanges
+      // the code server-side and then redirects to reset-password with the session
+      // already set in cookies. This URL must be allowlisted in Supabase Auth >
+      // URL Configuration > Redirect URLs.
+      const appOrigin =
+        process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, '') ||
+        window.location.origin
+      const redirectTo = `${appOrigin}/auth/callback?next=/auth/reset-password`
       const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
       if (error) throw error
       setIsSent(true)
